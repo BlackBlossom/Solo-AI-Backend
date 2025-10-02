@@ -54,11 +54,13 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
       }
     },
     servers: [
+      ...(process.env.PRODUCTION_URL ? [{
+        url: process.env.PRODUCTION_URL,
+        description: '🚀 Production Server'
+      }] : []),
       {
-        url: process.env.NODE_ENV === 'production' 
-          ? 'https://your-api-domain.com'
-          : `http://localhost:${process.env.PORT || 5000}`,
-        description: process.env.NODE_ENV === 'production' ? '🌐 Production Server' : '💻 Development Server'
+        url: `http://localhost:${process.env.PORT || 5000}`,
+        description: '💻 Development Server'
       }
     ],
     components: {
