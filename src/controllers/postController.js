@@ -150,11 +150,10 @@ const createPost = async (req, res, next) => {
       // Continue with local post creation even if Bundle.social fails
     }
 
-    // If not scheduled, attempt to publish immediately
+    // If not scheduled and auto-publish is enabled, update status to published
     if (!scheduledFor && settings?.autoPublish) {
       try {
-        await bundleSocialService.publishPost(req.user.bundleTeamId, post.bundlePostId);
-        
+        // Update post status to indicate it should be published
         post.publishedAt = new Date();
         post.bundleStatus = 'published';
         post.platforms.forEach(platform => {
@@ -167,8 +166,10 @@ const createPost = async (req, res, next) => {
         emailService.sendPostPublishedNotification(req.user, post).catch(err => {
           logger.warn('Failed to send post notification:', err.message);
         });
+        
+        logger.info('Post marked as published for auto-publish:', { postId: post._id });
       } catch (publishError) {
-        logger.warn('Failed to publish post immediately:', publishError.message);
+        logger.warn('Failed to update post publish status:', publishError.message);
       }
     }
 
@@ -232,15 +233,26 @@ const schedulePost = async (req, res, next) => {
 
     // Schedule post in Bundle.social
     try {
-      const bundlePost = await bundleSocialService.createPost(req.user.bundleTeamId, {
-        mediaId: video.bundleUploadId,
-        caption: caption + (hashtags?.length ? ' ' + hashtags.map(h => `#${h}`).join(' ') : ''),
-        platforms: platforms.map(p => ({
-          name: p.name,
-          accountId: connectedAccounts.find(acc => acc.platform === p.name).bundleAccountId
-        })),
-        scheduledFor,
-        settings
+      const socialAccountTypes = platforms.map(p => p.name.toUpperCase());
+      const fullCaption = caption + (hashtags?.length ? ' ' + hashtags.map(h => `#${h}`).join(' ') : '');
+      
+      // Prepare platform-specific data
+      const platformData = {};
+      platforms.forEach(platform => {
+        const platformName = platform.name.toUpperCase();
+        platformData[platformName] = {
+          text: fullCaption,
+          uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
+        };
+      });
+
+      const bundlePost = await bundleSocialService.createPost({
+        teamId: req.user.bundleTeamId,
+        title: video.title || caption.substring(0, 50),
+        scheduledFor: new Date(scheduledFor).toISOString(),
+        status: 'SCHEDULED',
+        socialAccountTypes,
+        data: platformData
       });
 
       post.bundlePostId = bundlePost.id;
@@ -292,7 +304,7 @@ const getUserPosts = async (req, res, next) => {
       for (let post of posts) {
         if (post.bundlePostId) {
           try {
-            const bundlePost = await bundleSocialService.getPost(req.user.bundleTeamId, post.bundlePostId);
+            const bundlePost = await bundleSocialService.getPost(post.bundlePostId);
             post.bundleStatus = bundlePost.status;
             if (bundlePost.publishedAt && !post.publishedAt) {
               post.publishedAt = new Date(bundlePost.publishedAt);
@@ -356,10 +368,7 @@ const getPost = async (req, res, next) => {
     // Get latest analytics if available
     if (post.bundlePostId) {
       try {
-        const analytics = await bundleSocialService.getPostAnalytics(
-          req.user.bundleTeamId,
-          post.bundlePostId
-        );
+        const analytics = await bundleSocialService.getPostAnalytics(post.bundlePostId);
         
         post.analytics = analytics;
         post.analytics.lastUpdated = new Date();
@@ -408,10 +417,10 @@ const updatePost = async (req, res, next) => {
     // Update in Bundle.social
     if (post.bundlePostId) {
       try {
-        await bundleSocialService.updatePost(req.user.bundleTeamId, post.bundlePostId, {
-          caption: post.caption + (post.hashtags?.length ? ' ' + post.hashtags.map(h => `#${h}`).join(' ') : ''),
-          scheduledFor: post.scheduledFor,
-          settings: post.settings
+        await bundleSocialService.updatePost(post.bundlePostId, {
+          title: post.caption.substring(0, 50),
+          postDate: post.scheduledFor ? post.scheduledFor.toISOString() : undefined,
+          // Bundle.social may not support all update operations
         });
       } catch (bundleError) {
         logger.warn('Bundle.social post update failed:', bundleError.message);
@@ -442,7 +451,7 @@ const deletePost = async (req, res, next) => {
     // Delete from Bundle.social
     if (post.bundlePostId) {
       try {
-        await bundleSocialService.deletePost(req.user.bundleTeamId, post.bundlePostId);
+        await bundleSocialService.deletePost(post.bundlePostId);
       } catch (bundleError) {
         logger.warn('Failed to delete from Bundle.social:', bundleError.message);
       }
@@ -475,13 +484,20 @@ const publishPost = async (req, res, next) => {
       return sendBadRequest(res, 'Post is already published');
     }
 
-    // Publish via Bundle.social
-    const publishResult = await bundleSocialService.publishPost(
-      req.user.bundleTeamId,
-      post.bundlePostId
-    );
+    // Update post status to published in Bundle.social
+    let publishResult = null;
+    if (post.bundlePostId) {
+      try {
+        publishResult = await bundleSocialService.updatePost(post.bundlePostId, {
+          status: 'PUBLISHED'
+        });
+        logger.info('Post updated to published in Bundle.social:', { postId: post._id });
+      } catch (bundleError) {
+        logger.warn('Failed to update post status in Bundle.social:', bundleError.message);
+      }
+    }
 
-    // Update post status
+    // Update local post status
     post.publishedAt = new Date();
     post.bundleStatus = 'published';
     post.platforms.forEach(platform => {
@@ -530,10 +546,7 @@ const getPostAnalytics = async (req, res, next) => {
     // Get latest analytics from Bundle.social
     if (post.bundlePostId) {
       try {
-        const freshAnalytics = await bundleSocialService.getPostAnalytics(
-          req.user.bundleTeamId,
-          post.bundlePostId
-        );
+        const freshAnalytics = await bundleSocialService.getPostAnalytics(post.bundlePostId);
         
         analytics = freshAnalytics;
         

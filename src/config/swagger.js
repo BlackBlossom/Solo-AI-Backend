@@ -13,7 +13,10 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
 
 ## 🌟 Key Features
 
-- **🔐 JWT Authentication** - Secure user registration and login
+- **🔐 Advanced JWT Authentication** - Secure user registration, login with refresh tokens
+- **🌐 Social Login Support** - Email, Google, and Apple authentication
+- **👤 Enhanced User Profiles** - Comprehensive personal information management
+- **🔄 Refresh Token System** - Persistent sessions without frequent re-login
 - **📹 Video Management** - Upload, process, and manage video content
 - **🤖 AI Content Generation** - OpenAI-powered captions and hashtags
 - **📱 Social Media Integration** - Connect Instagram, Twitter, Facebook, LinkedIn, TikTok, YouTube
@@ -24,10 +27,17 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
 
 ## 🚦 Getting Started
 
-1. **Register** a new account using \`/auth/register\`
-2. **Login** to get your JWT token from \`/auth/login\`
-3. **Authorize** by clicking the 🔒 button above and enter: \`Bearer YOUR_TOKEN\`
-4. **Explore** and test all available endpoints
+1. **Register** a new account using \`/auth/register\` with your preferred login type (email/google/apple)
+2. **Login** to get your JWT tokens from \`/auth/login\`
+3. **Authorize** by clicking the 🔒 button above and enter: \`Bearer YOUR_ACCESS_TOKEN\`
+4. **Stay logged in** using \`/auth/refresh-token\` to get new access tokens
+5. **Update your profile** with personal details using \`/users/profile\`
+6. **Explore** and test all available endpoints
+
+### 🔑 Authentication Types
+- **Email**: Traditional email/password authentication  
+- **Google**: OAuth-based Google sign-in (no password required)
+- **Apple**: OAuth-based Apple sign-in (no password required)
 
 ## 📋 Rate Limits
 
@@ -75,7 +85,7 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
       schemas: {
         User: {
           type: 'object',
-          required: ['name', 'email'],
+          required: ['email'],
           properties: {
             _id: {
               type: 'string',
@@ -94,6 +104,30 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
               format: 'email',
               description: 'User email address (unique)',
               example: 'john@example.com'
+            },
+            dateOfBirth: {
+              type: 'string',
+              format: 'date',
+              description: 'User date of birth (must be 13+ years old)',
+              example: '1990-05-15'
+            },
+            gender: {
+              type: 'string',
+              enum: ['male', 'female', 'other', 'prefer_not_to_say'],
+              description: 'User gender',
+              example: 'male'
+            },
+            phoneNumber: {
+              type: 'string',
+              description: 'User phone number with country code',
+              example: '+1234567890'
+            },
+            loginType: {
+              type: 'string',
+              enum: ['email', 'google', 'apple'],
+              description: 'Type of authentication used',
+              default: 'email',
+              example: 'email'
             },
             profilePicture: {
               type: 'string',
@@ -528,6 +562,147 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
               type: 'string',
               format: 'date-time',
               description: 'Last update timestamp'
+            }
+          }
+        },
+        AuthTokens: {
+          type: 'object',
+          description: 'JWT authentication tokens',
+          properties: {
+            accessToken: {
+              type: 'string',
+              description: 'JWT access token (expires in 24h)',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+            },
+            refreshToken: {
+              type: 'string',
+              description: 'JWT refresh token (expires in 7d)',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+            },
+            expiresIn: {
+              type: 'string',
+              description: 'Access token expiration time',
+              example: '24h'
+            }
+          }
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email address',
+              example: 'john@example.com'
+            },
+            password: {
+              type: 'string',
+              description: 'User password (required only for email login)',
+              example: 'securePassword123',
+              minLength: 6
+            },
+            loginType: {
+              type: 'string',
+              enum: ['email', 'google', 'apple'],
+              description: 'Type of login authentication',
+              default: 'email',
+              example: 'email'
+            }
+          }
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['name', 'email', 'loginType'],
+          properties: {
+            name: {
+              type: 'string',
+              description: 'User full name',
+              example: 'John Doe',
+              minLength: 2,
+              maxLength: 50
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email address',
+              example: 'john@example.com'
+            },
+            password: {
+              type: 'string',
+              description: 'User password (required only for email registration). Must contain at least one lowercase letter, one uppercase letter, one number, and one special character',
+              example: 'SecurePass123!',
+              minLength: 8
+            },
+            confirmPassword: {
+              type: 'string',
+              description: 'Password confirmation (required only for email registration). Must match the password field',
+              example: 'SecurePass123!',
+              minLength: 8
+            },
+            loginType: {
+              type: 'string',
+              enum: ['email', 'google', 'apple'],
+              description: 'Type of authentication to use',
+              default: 'email',
+              example: 'email'
+            },
+            dateOfBirth: {
+              type: 'string',
+              format: 'date',
+              description: 'User date of birth (optional)',
+              example: '1990-05-15'
+            },
+            gender: {
+              type: 'string',
+              enum: ['male', 'female', 'other', 'prefer_not_to_say'],
+              description: 'User gender (optional)',
+              example: 'male'
+            },
+            phoneNumber: {
+              type: 'string',
+              description: 'User phone number with country code (optional)',
+              example: '+1234567890'
+            }
+          }
+        },
+        RefreshTokenRequest: {
+          type: 'object',
+          required: ['refreshToken'],
+          properties: {
+            refreshToken: {
+              type: 'string',
+              description: 'Valid refresh token',
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+            }
+          }
+        },
+        ProfileUpdateRequest: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'User full name',
+              example: 'John Doe',
+              minLength: 2,
+              maxLength: 50
+            },
+            dateOfBirth: {
+              type: 'string',
+              format: 'date',
+              description: 'User date of birth (must be 13+ years old)',
+              example: '1990-05-15'
+            },
+            gender: {
+              type: 'string',
+              enum: ['male', 'female', 'other', 'prefer_not_to_say'],
+              description: 'User gender',
+              example: 'male'
+            },
+            phoneNumber: {
+              type: 'string',
+              description: 'User phone number with country code',
+              example: '+1234567890'
             }
           }
         },

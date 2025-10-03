@@ -233,6 +233,17 @@ class BundleSocialService {
     }
   }
 
+  // Delete team
+  async deleteTeam(teamId) {
+    try {
+      await this.api.delete(`/team/${teamId}`);
+      logger.info('Bundle.social team deleted:', { teamId });
+    } catch (error) {
+      logger.error('Failed to delete Bundle.social team:', error.response?.data || error.message);
+      throw new Error('Failed to delete social media team');
+    }
+  }
+
   // Get team list
   async getTeamList() {
     try {

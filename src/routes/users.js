@@ -2,7 +2,8 @@ const express = require('express');
 const userController = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 const { uploadImage, handleMulterError } = require('../middleware/upload');
-const { validateImageUpload } = require('../middleware/validation');
+const { validate, validateImageUpload } = require('../middleware/validation');
+const { updateProfileSchema, deleteAccountSchema } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -42,32 +43,26 @@ router.use(protect);
  *         $ref: '#/components/responses/UnauthorizedError'
  *   put:
  *     summary: Update user profile
+ *     description: Update user profile information. All fields are optional.
  *     tags: [Users]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               firstName:
- *                 type: string
- *                 example: John
- *               lastName:
- *                 type: string
- *                 example: Doe
- *               username:
- *                 type: string
- *                 example: johndoe
- *               bio:
- *                 type: string
- *                 example: Content creator and video editor
- *               location:
- *                 type: string
- *                 example: New York, NY
- *               website:
- *                 type: string
- *                 example: https://johndoe.com
+ *             $ref: '#/components/schemas/ProfileUpdateRequest'
+ *           examples:
+ *             update_profile:
+ *               summary: Update Profile
+ *               description: Update user profile with personal information
+ *               value:
+ *                 name: "John Smith"
+ *                 dateOfBirth: "1990-05-15"
+ *                 gender: "male"
+ *                 phoneNumber: "+1234567890"
+ *                 preferences:
+ *                   defaultPlatforms: ["instagram", "tiktok"]
+ *                   autoGenerateCaption: true
  *     responses:
  *       200:
  *         description: Profile updated successfully
@@ -92,7 +87,7 @@ router.use(protect);
 router
   .route('/profile')
   .get(userController.getProfile)
-  .put(userController.updateProfile);
+  .put(validate(updateProfileSchema), userController.updateProfile);
 
 /**
  * @swagger
@@ -235,19 +230,74 @@ router.get('/stats', userController.getUserStats);
  * @swagger
  * /api/v1/users/account:
  *   delete:
- *     summary: Delete user account
+ *     summary: Delete user account and all related data
+ *     description: |
+ *       Permanently deletes the user account and all associated data including:
+ *       - User profile and authentication data
+ *       - All uploaded videos and posts (database records)
+ *       - Connected social media accounts (database records)
+ *       - Bundle.social team (automatically deletes all uploads, posts, and social connections)
+ *       - User preferences and settings
+ *       
+ *       **Efficient Cleanup**: Deleting the Bundle.social team automatically removes all related data 
+ *       (uploads, posts, social accounts) from the Bundle.social platform in a single operation.
+ *       
+ *       **Warning**: This action is irreversible!
+ *       
+ *       **For email users**: Password verification is required
+ *       **For social users** (Google/Apple): No password required
  *     tags: [Users]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: User password (required only for email login type)
+ *                 example: "SecurePass123!"
+ *           examples:
+ *             email_user_deletion:
+ *               summary: Delete Email User Account
+ *               description: For users with email login type (password required)
+ *               value:
+ *                 password: "SecurePass123!"
+ *             social_user_deletion:
+ *               summary: Delete Social User Account
+ *               description: For users with Google/Apple login (no password required)
+ *               value: {}
  *     responses:
  *       200:
- *         description: Account deleted successfully
+ *         description: Account and all related data deleted successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Success'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Account and all related data deleted successfully
+ *       400:
+ *         description: Password required or incorrect
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
-router.delete('/account', userController.deleteAccount);
+router.delete('/account', validate(deleteAccountSchema), userController.deleteAccount);
 
 /**
  * @swagger

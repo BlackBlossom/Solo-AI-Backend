@@ -26,7 +26,13 @@ const getProfile = async (req, res, next) => {
 // Update user profile
 const updateProfile = async (req, res, next) => {
   try {
-    const allowedFields = ['name', 'preferences'];
+    const allowedFields = [
+      'name',
+      'dateOfBirth', 
+      'gender', 
+      'phoneNumber', 
+      'preferences'
+    ];
     const updateData = {};
 
     // Filter allowed fields
@@ -35,6 +41,14 @@ const updateProfile = async (req, res, next) => {
         updateData[key] = req.body[key];
       }
     });
+
+    // Validate date of birth if provided
+    if (updateData.dateOfBirth) {
+      const dob = new Date(updateData.dateOfBirth);
+      if (dob >= new Date()) {
+        return sendBadRequest(res, 'Date of birth must be in the past');
+      }
+    }
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -49,7 +63,10 @@ const updateProfile = async (req, res, next) => {
       return sendNotFound(res, 'User not found');
     }
 
-    logger.info('Profile updated successfully:', { userId: user._id });
+    logger.info('Profile updated successfully:', { 
+      userId: user._id, 
+      updatedFields: Object.keys(updateData) 
+    });
 
     sendSuccess(res, 'Profile updated successfully', { user });
   } catch (error) {
@@ -125,27 +142,102 @@ const deleteAccount = async (req, res, next) => {
   try {
     const { password } = req.body;
 
-    // Get user with password
+    // Get user with password and populate related data
     const user = await User.findById(req.user.id).select('+password');
 
-    // Verify password
-    const isPasswordCorrect = await user.correctPassword(password, user.password);
-    
-    if (!isPasswordCorrect) {
-      return sendBadRequest(res, 'Password is incorrect');
+    if (!user) {
+      return sendNotFound(res, 'User not found');
     }
 
-    // In a real app, you might want to:
-    // 1. Delete all user's videos and posts
-    // 2. Disconnect social accounts
-    // 3. Cancel subscriptions
-    // 4. Send confirmation email
+    // Verify password for email login type users
+    if (user.loginType === 'email') {
+      if (!password) {
+        return sendBadRequest(res, 'Password is required for account deletion');
+      }
+      
+      const isPasswordCorrect = await user.correctPassword(password, user.password);
+      if (!isPasswordCorrect) {
+        return sendBadRequest(res, 'Password is incorrect');
+      }
+    }
 
-    await User.findByIdAndDelete(req.user.id);
+    const userId = user._id;
+    const bundleTeamId = user.bundleTeamId;
 
-    logger.info('User account deleted:', { userId: req.user.id });
+    logger.info('Starting account deletion process:', { 
+      userId, 
+      bundleTeamId,
+      loginType: user.loginType 
+    });
 
-    sendSuccess(res, 'Account deleted successfully');
+    // Start deletion process with database transaction for data consistency
+    const session = await User.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // 1. Get counts for logging before deletion
+        const Video = require('../models/Video');
+        const Post = require('../models/Post');
+        const SocialAccount = require('../models/SocialAccount');
+        
+        const videoCount = await Video.countDocuments({ user: userId }).session(session);
+        const postCount = await Post.countDocuments({ user: userId }).session(session);
+        const socialAccountCount = await SocialAccount.countDocuments({ user: userId }).session(session);
+
+        // 2. Delete all user's videos from database
+        // Note: Bundle.social uploads will be deleted automatically when team is deleted
+        await Video.deleteMany({ user: userId }).session(session);
+        logger.info('Deleted user videos from database:', { userId, count: videoCount });
+
+        // 3. Delete all user's posts from database  
+        // Note: Bundle.social posts will be deleted automatically when team is deleted
+        await Post.deleteMany({ user: userId }).session(session);
+        logger.info('Deleted user posts from database:', { userId, count: postCount });
+
+        // 4. Delete all social accounts from database
+        // Note: Bundle.social social accounts will be disconnected automatically when team is deleted
+        await SocialAccount.deleteMany({ user: userId }).session(session);
+        logger.info('Deleted social accounts from database:', { userId, count: socialAccountCount });
+
+        // 5. Delete the user
+        await User.findByIdAndDelete(userId).session(session);
+        logger.info('Deleted user record:', { userId });
+      });
+
+      // 6. Delete Bundle.social team (outside transaction as it's external API)
+      // This will automatically delete all related data: uploads, posts, social accounts
+      if (bundleTeamId) {
+        try {
+          const bundleSocialService = require('../services/bundleSocialService');
+          await bundleSocialService.deleteTeam(bundleTeamId);
+          logger.info('Deleted Bundle.social team and all related data:', { 
+            bundleTeamId, 
+            userId,
+            note: 'This automatically deleted all uploads, posts, and social account connections'
+          });
+        } catch (error) {
+          logger.error('Failed to delete Bundle.social team:', { 
+            bundleTeamId, 
+            userId, 
+            error: error.message 
+          });
+          // Don't fail the entire operation if Bundle.social deletion fails
+        }
+      }
+
+      logger.info('Account deletion completed successfully:', { userId });
+      sendSuccess(res, 'Account and all related data deleted successfully');
+
+    } catch (transactionError) {
+      logger.error('Database transaction failed during account deletion:', {
+        userId,
+        error: transactionError.message
+      });
+      throw transactionError;
+    } finally {
+      await session.endSession();
+    }
+
   } catch (error) {
     logger.error('Delete account error:', error);
     next(error);

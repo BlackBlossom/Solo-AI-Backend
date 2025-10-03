@@ -18,9 +18,44 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
+    required: function() {
+      return this.loginType === 'email';
+    },
     minlength: 8,
     select: false
+  },
+  
+  // Authentication type
+  loginType: {
+    type: String,
+    enum: ['email', 'google', 'apple'],
+    required: true,
+    default: 'email'
+  },
+  
+  // Additional personal details
+  dateOfBirth: {
+    type: Date,
+    validate: {
+      validator: function(value) {
+        return !value || value < new Date();
+      },
+      message: 'Date of birth must be in the past'
+    }
+  },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other', 'prefer-not-to-say'],
+    lowercase: true
+  },
+  phoneNumber: {
+    type: String,
+    validate: {
+      validator: function(value) {
+        return !value || /^\+?[\d\s\-\(\)]{10,15}$/.test(value);
+      },
+      message: 'Please provide a valid phone number'
+    }
   },
   profilePicture: {
     type: String,
@@ -38,6 +73,10 @@ const userSchema = new mongoose.Schema({
   passwordResetToken: String,
   passwordResetExpires: Date,
   passwordChangedAt: Date,
+  
+  // Refresh token for JWT
+  refreshToken: String,
+  refreshTokenExpires: Date,
   
   // Account security
   loginAttempts: {
@@ -110,7 +149,7 @@ userSchema.virtual('isLocked').get(function() {
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   
   this.password = await bcrypt.hash(this.password, 12);
   next();

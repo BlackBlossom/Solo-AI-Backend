@@ -6,14 +6,24 @@ const generateRandomString = (length = 32) => {
   return crypto.randomBytes(length).toString('hex');
 };
 
-// Generate JWT token
-const generateToken = (payload, expiresIn = process.env.JWT_EXPIRES_IN) => {
+// Generate JWT access token
+const generateToken = (payload, expiresIn = process.env.JWT_EXPIRES_IN || '15m') => {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+};
+
+// Generate refresh token
+const generateRefreshToken = (payload, expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d') => {
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn });
 };
 
 // Verify JWT token
 const verifyToken = (token) => {
   return jwt.verify(token, process.env.JWT_SECRET);
+};
+
+// Verify refresh token
+const verifyRefreshToken = (token) => {
+  return jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
 };
 
 // Format file size
@@ -92,7 +102,9 @@ const removeUndefined = (obj) => {
 module.exports = {
   generateRandomString,
   generateToken,
+  generateRefreshToken,
   verifyToken,
+  verifyRefreshToken,
   formatFileSize,
   formatDuration,
   isValidEmail,
