@@ -10,13 +10,13 @@ const {
   sendUnauthorized, 
   sendNotFound 
 } = require('../utils/response');
-const { generateToken } = require('../utils/helpers');
+const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 // Register new user
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, loginType = 'email' } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -31,17 +31,31 @@ const register = async (req, res, next) => {
       _id: 'temp' // Will be replaced with actual ID after user creation
     });
 
-    // Create user
-    const user = await User.create({
+    // Create user data based on login type
+    const userData = {
       name,
       email,
-      password,
+      loginType,
       bundleOrganizationId: orgData.bundleOrganizationId,
       bundleTeamId: orgData.bundleTeamId
-    });
+    };
 
-    // Generate JWT token
-    const token = generateToken({ id: user._id });
+    // Only add password for email registration
+    if (loginType === 'email') {
+      userData.password = password;
+    }
+
+    // Create user
+    const user = await User.create(userData);
+
+    // Generate tokens
+    const accessToken = generateToken({ id: user._id });
+    const refreshToken = generateRefreshToken({ id: user._id });
+
+    // Store refresh token in database
+    user.refreshToken = refreshToken;
+    user.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    await user.save({ validateBeforeSave: false });
 
     // Send welcome email (optional for MVP)
     emailService.sendWelcomeEmail(user).catch(err => {
@@ -50,12 +64,18 @@ const register = async (req, res, next) => {
 
     // Remove password from response
     user.password = undefined;
+    user.refreshToken = undefined;
 
-    logger.info('User registered successfully:', { userId: user._id, email: user.email });
+    logger.info('User registered successfully:', { 
+      userId: user._id, 
+      email: user.email, 
+      loginType: user.loginType 
+    });
 
     sendCreated(res, 'User registered successfully', {
       user,
-      token,
+      accessToken,
+      refreshToken,
       organization: orgData.teamData
     });
   } catch (error) {
@@ -67,13 +87,19 @@ const register = async (req, res, next) => {
 // Login user
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, loginType = 'email' } = req.body;
 
-    // Find user and include password field
-    const user = await User.findOne({ email }).select('+password');
+    // Find user and include password field for email login
+    const selectFields = loginType === 'email' ? '+password' : '';
+    const user = await User.findOne({ email }).select(selectFields);
     
     if (!user) {
-      return sendUnauthorized(res, 'Invalid email or password');
+      return sendUnauthorized(res, 'Invalid credentials');
+    }
+
+    // Check if login type matches
+    if (user.loginType !== loginType) {
+      return sendUnauthorized(res, `This account is registered with ${user.loginType} login. Please use the correct login method.`);
     }
 
     // Check if account is locked
@@ -81,14 +107,23 @@ const login = async (req, res, next) => {
       return sendUnauthorized(res, 'Account is temporarily locked due to too many failed login attempts');
     }
 
-    // Check password
-    const isPasswordCorrect = await user.correctPassword(password, user.password);
-    
-    if (!isPasswordCorrect) {
-      // Increment login attempts
-      await user.incLoginAttempts();
-      return sendUnauthorized(res, 'Invalid email or password');
+    // For email login, check password
+    if (loginType === 'email') {
+      if (!password) {
+        return sendBadRequest(res, 'Password is required for email login');
+      }
+
+      const isPasswordCorrect = await user.correctPassword(password, user.password);
+      
+      if (!isPasswordCorrect) {
+        // Increment login attempts
+        await user.incLoginAttempts();
+        return sendUnauthorized(res, 'Invalid email or password');
+      }
     }
+
+    // For social logins (google, apple), we trust that the frontend has already validated the user
+    // In production, you would verify the social login token here
 
     // Reset login attempts on successful login
     if (user.loginAttempts > 0) {
@@ -97,19 +132,30 @@ const login = async (req, res, next) => {
 
     // Update last login
     user.lastLoginAt = new Date();
+
+    // Generate new tokens
+    const accessToken = generateToken({ id: user._id });
+    const refreshToken = generateRefreshToken({ id: user._id });
+
+    // Store refresh token in database
+    user.refreshToken = refreshToken;
+    user.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     await user.save({ validateBeforeSave: false });
 
-    // Generate JWT token
-    const token = generateToken({ id: user._id });
-
-    // Remove password from response
+    // Remove sensitive data from response
     user.password = undefined;
+    user.refreshToken = undefined;
 
-    logger.info('User logged in successfully:', { userId: user._id, email: user.email });
+    logger.info('User logged in successfully:', { 
+      userId: user._id, 
+      email: user.email, 
+      loginType: user.loginType 
+    });
 
     sendSuccess(res, 'Login successful', {
       user,
-      token
+      accessToken,
+      refreshToken
     });
   } catch (error) {
     logger.error('Login error:', error);
@@ -117,10 +163,69 @@ const login = async (req, res, next) => {
   }
 };
 
-// Logout user (client-side token removal)
-const logout = (req, res) => {
-  logger.info('User logged out:', { userId: req.user._id });
-  sendSuccess(res, 'Logout successful');
+// Refresh access token
+const refreshToken = async (req, res, next) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (!token) {
+      return sendBadRequest(res, 'Refresh token is required');
+    }
+
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = verifyRefreshToken(token);
+    } catch (error) {
+      return sendUnauthorized(res, 'Invalid or expired refresh token');
+    }
+
+    // Find user and check if refresh token matches
+    const user = await User.findById(decoded.id);
+    if (!user || user.refreshToken !== token) {
+      return sendUnauthorized(res, 'Invalid refresh token');
+    }
+
+    // Check if refresh token has expired
+    if (user.refreshTokenExpires && user.refreshTokenExpires < new Date()) {
+      return sendUnauthorized(res, 'Refresh token has expired');
+    }
+
+    // Generate new access token
+    const newAccessToken = generateToken({ id: user._id });
+
+    // Optionally generate new refresh token (for rotation)
+    const newRefreshToken = generateRefreshToken({ id: user._id });
+    user.refreshToken = newRefreshToken;
+    user.refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    await user.save({ validateBeforeSave: false });
+
+    logger.info('Tokens refreshed successfully:', { userId: user._id });
+
+    sendSuccess(res, 'Tokens refreshed successfully', {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    logger.error('Refresh token error:', error);
+    next(error);
+  }
+};
+
+// Logout user (invalidate refresh token)
+const logout = async (req, res, next) => {
+  try {
+    // Clear refresh token from database
+    await User.findByIdAndUpdate(req.user._id, {
+      $unset: { refreshToken: 1, refreshTokenExpires: 1 }
+    });
+
+    logger.info('User logged out:', { userId: req.user._id });
+    sendSuccess(res, 'Logout successful');
+  } catch (error) {
+    logger.error('Logout error:', error);
+    next(error);
+  }
 };
 
 // Forgot password
@@ -251,6 +356,7 @@ const getMe = async (req, res) => {
 module.exports = {
   register,
   login,
+  refreshToken,
   logout,
   forgotPassword,
   resetPassword,

@@ -11,14 +11,35 @@ const registerSchema = Joi.object({
     'string.email': 'Please provide a valid email address',
     'any.required': 'Email is required'
   }),
-  password: Joi.string().min(8).pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])')).required().messages({
-    'string.min': 'Password must be at least 8 characters long',
-    'string.pattern.base': 'Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character',
-    'any.required': 'Password is required'
+  loginType: Joi.string().valid('email', 'google', 'apple').default('email').messages({
+    'any.only': 'Login type must be email, google, or apple'
   }),
-  confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
-    'any.only': 'Passwords do not match',
-    'any.required': 'Password confirmation is required'
+  password: Joi.when('loginType', {
+    is: 'email',
+    then: Joi.string().min(8).pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])')).required().messages({
+      'string.min': 'Password must be at least 8 characters long',
+      'string.pattern.base': 'Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character',
+      'any.required': 'Password is required for email registration'
+    }),
+    otherwise: Joi.forbidden().messages({
+      'any.unknown': 'Password should not be provided for social login'
+    })
+  }),
+  confirmPassword: Joi.when('loginType', {
+    is: 'email',
+    then: Joi.string().valid(Joi.ref('password')).required().messages({
+      'any.only': 'Passwords do not match',
+      'any.required': 'Password confirmation is required'
+    }),
+    otherwise: Joi.forbidden()
+  }),
+  // Optional profile fields during registration
+  dateOfBirth: Joi.date().max('now').optional().messages({
+    'date.max': 'Date of birth must be in the past'
+  }),
+  gender: Joi.string().valid('male', 'female', 'other', 'prefer-not-to-say').optional(),
+  phoneNumber: Joi.string().pattern(/^\+?[\d\s\-\(\)]{10,15}$/).optional().messages({
+    'string.pattern.base': 'Please provide a valid phone number'
   })
 });
 
@@ -27,9 +48,34 @@ const loginSchema = Joi.object({
     'string.email': 'Please provide a valid email address',
     'any.required': 'Email is required'
   }),
-  password: Joi.string().required().messages({
-    'any.required': 'Password is required'
+  loginType: Joi.string().valid('email', 'google', 'apple').default('email'),
+  password: Joi.when('loginType', {
+    is: 'email',
+    then: Joi.string().required().messages({
+      'any.required': 'Password is required for email login'
+    }),
+    otherwise: Joi.forbidden().messages({
+      'any.unknown': 'Password should not be provided for social login'
+    })
   })
+});
+
+// User profile update schema
+const updateProfileSchema = Joi.object({
+  name: Joi.string().min(2).max(50).optional(),
+  dateOfBirth: Joi.date().max('now').optional().messages({
+    'date.max': 'Date of birth must be in the past'
+  }),
+  gender: Joi.string().valid('male', 'female', 'other', 'prefer-not-to-say').optional(),
+  phoneNumber: Joi.string().pattern(/^\+?[\d\s\-\(\)]{10,15}$/).optional().messages({
+    'string.pattern.base': 'Please provide a valid phone number'
+  }),
+  preferences: Joi.object({
+    defaultPlatforms: Joi.array().items(
+      Joi.string().valid('instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin')
+    ).optional(),
+    autoGenerateCaption: Joi.boolean().optional()
+  }).optional()
 });
 
 // Video validation schemas
@@ -120,13 +166,30 @@ const aiCaptionSchema = Joi.object({
   maxLength: Joi.number().integer().min(50).max(2200).default(300)
 });
 
+// Refresh token validation
+const refreshTokenSchema = Joi.object({
+  refreshToken: Joi.string().required().messages({
+    'any.required': 'Refresh token is required'
+  })
+});
+
+// Delete account validation
+const deleteAccountSchema = Joi.object({
+  password: Joi.string().optional().messages({
+    'string.base': 'Password must be a string'
+  })
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
+  updateProfileSchema,
   videoUploadSchema,
   videoEditSchema,
   postCreateSchema,
   socialAccountConnectSchema,
   paginationSchema,
-  aiCaptionSchema
+  aiCaptionSchema,
+  refreshTokenSchema,
+  deleteAccountSchema
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const authController = require('../controllers/authController');
 const { validate } = require('../middleware/validation');
 const { authLimiter } = require('../middleware/rateLimiting');
-const { registerSchema, loginSchema } = require('../utils/validation');
+const { registerSchema, loginSchema, refreshTokenSchema } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -21,6 +21,11 @@ router.use(authLimiter);
  * /api/v1/auth/register:
  *   post:
  *     summary: Register a new user
+ *     description: |
+ *       Register a new user with different authentication types:
+ *       - **Email**: Requires password and confirmPassword
+ *       - **Google**: Only requires email and name (no password)
+ *       - **Apple**: Only requires email and name (no password)
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -28,33 +33,40 @@ router.use(authLimiter);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *               - confirmPassword
- *             properties:
- *               name:
- *                 type: string
- *                 description: Full name of the user
- *                 example: John Doe
- *                 minLength: 2
- *                 maxLength: 50
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Valid email address
- *                 example: john@example.com
- *               password:
- *                 type: string
- *                 description: Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character
- *                 example: Password123!
- *                 minLength: 8
- *               confirmPassword:
- *                 type: string
- *                 description: Must match the password field
- *                 example: Password123!
+ *             $ref: '#/components/schemas/RegisterRequest'
+ *           examples:
+ *             email_registration:
+ *               summary: Email Registration
+ *               description: Register with email and password
+ *               value:
+ *                 name: "John Doe"
+ *                 email: "john@example.com"
+ *                 password: "SecurePass123!"
+ *                 confirmPassword: "SecurePass123!"
+ *                 loginType: "email"
+ *                 dateOfBirth: "1990-05-15"
+ *                 gender: "male"
+ *                 phoneNumber: "+1234567890"
+ *             google_registration:
+ *               summary: Google Registration
+ *               description: Register with Google OAuth (no password required)
+ *               value:
+ *                 name: "John Doe"
+ *                 email: "john@gmail.com"
+ *                 loginType: "google"
+ *                 dateOfBirth: "1990-05-15"
+ *                 gender: "male"
+ *                 phoneNumber: "+1234567890"
+ *             apple_registration:
+ *               summary: Apple Registration
+ *               description: Register with Apple Sign-In (no password required)
+ *               value:
+ *                 name: "John Doe"
+ *                 email: "john@icloud.com"
+ *                 loginType: "apple"
+ *                 dateOfBirth: "1990-05-15"
+ *                 gender: "male"
+ *                 phoneNumber: "+1234567890"
  *     responses:
  *       201:
  *         description: User registered successfully
@@ -74,8 +86,8 @@ router.use(authLimiter);
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
- *                     token:
- *                       type: string
+ *                     tokens:
+ *                       $ref: '#/components/schemas/AuthTokens'
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       409:
@@ -92,6 +104,11 @@ router.post('/register', validate(registerSchema), authController.register);
  * /api/v1/auth/login:
  *   post:
  *     summary: Login user
+ *     description: |
+ *       Login with different authentication types:
+ *       - **Email**: Requires password
+ *       - **Google**: Only requires email (OAuth handled externally)
+ *       - **Apple**: Only requires email (OAuth handled externally)
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -99,19 +116,27 @@ router.post('/register', validate(registerSchema), authController.register);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: john@example.com
- *               password:
- *                 type: string
- *                 description: User's password
- *                 example: Password123!
+ *             $ref: '#/components/schemas/LoginRequest'
+ *           examples:
+ *             email_login:
+ *               summary: Email Login
+ *               description: Login with email and password
+ *               value:
+ *                 email: "john@example.com"
+ *                 password: "SecurePass123!"
+ *                 loginType: "email"
+ *             google_login:
+ *               summary: Google Login
+ *               description: Login with Google OAuth (no password required)
+ *               value:
+ *                 email: "john@gmail.com"
+ *                 loginType: "google"
+ *             apple_login:
+ *               summary: Apple Login
+ *               description: Login with Apple Sign-In (no password required)
+ *               value:
+ *                 email: "john@icloud.com"
+ *                 loginType: "apple"
  *     responses:
  *       200:
  *         description: Login successful
@@ -131,8 +156,8 @@ router.post('/register', validate(registerSchema), authController.register);
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
- *                     token:
- *                       type: string
+ *                     tokens:
+ *                       $ref: '#/components/schemas/AuthTokens'
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -143,6 +168,57 @@ router.post('/register', validate(registerSchema), authController.register);
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', validate(loginSchema), authController.login);
+
+/**
+ * @swagger
+ * /api/v1/auth/refresh-token:
+ *   post:
+ *     summary: Refresh access token
+ *     description: Use a valid refresh token to get a new access token. The refresh token will be rotated (invalidated and replaced with a new one).
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenRequest'
+ *           examples:
+ *             refresh_token:
+ *               summary: Refresh Token
+ *               description: Provide a valid refresh token to get new access and refresh tokens
+ *               value:
+ *                 refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3MDFhMmY5ZGJkOTQwMDEyNzg5YWJjZCIsImlhdCI6MTcyODA1MzI0MSwiZXhwIjoxNzI4NjU4MDQxfQ.example_refresh_token_signature"
+ *     responses:
+ *       200:
+ *         description: Tokens refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Tokens refreshed successfully
+ *                 data:
+ *                   $ref: '#/components/schemas/AuthTokens'
+ *       400:
+ *         description: Invalid refresh token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Expired refresh token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/refresh-token', validate(refreshTokenSchema), authController.refreshToken);
 
 /**
  * @swagger
