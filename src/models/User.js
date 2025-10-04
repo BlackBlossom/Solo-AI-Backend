@@ -121,11 +121,7 @@ const userSchema = new mongoose.Schema({
     defaultPlatforms: [{
       type: String,
       enum: ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin']
-    }],
-    autoGenerateCaption: {
-      type: Boolean,
-      default: true
-    }
+    }]
   },
   
   // Timestamps

@@ -1,4 +1,5 @@
 const { bundleSocialAPI } = require('../config/bundleSocial');
+const FormData = require('form-data');
 const logger = require('../utils/logger');
 
 class BundleSocialService {
@@ -102,25 +103,63 @@ class BundleSocialService {
     }
   }
 
-  // Upload video to Bundle.social
+  // Upload video to Bundle.social directly from memory buffer
   async uploadVideo(teamId, videoData) {
     try {
+      if (!teamId) {
+        throw new Error('Team ID is required for Bundle.social upload');
+      }
+
+      if (!videoData.buffer) {
+        throw new Error('Video buffer is required for Bundle.social upload');
+      }
+
       const formData = new FormData();
-      formData.append('file', videoData.buffer, videoData.originalname);
+      formData.append('file', videoData.buffer, {
+        filename: videoData.originalname,
+        contentType: videoData.mimetype || 'video/mp4' // Use actual mimetype or default
+      });
       formData.append('teamId', teamId);
+
+      logger.info('Uploading video directly to Bundle.social:', { 
+        teamId, 
+        filename: videoData.originalname,
+        mimetype: videoData.mimetype,
+        bufferSize: videoData.buffer.length 
+      });
 
       const response = await this.api.post('/upload/', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          ...formData.getHeaders(),
+          'x-api-key': process.env.BUNDLE_SOCIAL_API_KEY, // Ensure API key is included
         },
-        timeout: 120000, // 2 minutes for video upload
+        timeout: 300000, // 5 minutes for direct video upload (increased timeout)
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       });
 
-      logger.info('Video uploaded to Bundle.social:', { teamId, uploadId: response.data.id });
+      logger.info('Video uploaded to Bundle.social successfully (direct upload):', { 
+        teamId, 
+        uploadId: response.data.id,
+        filename: videoData.originalname,
+        directUpload: true
+      });
+      
       return response.data;
     } catch (error) {
-      logger.error('Failed to upload video to Bundle.social:', error.response?.data || error.message);
-      throw new Error('Failed to upload video to social media platform');
+      const errorMessage = error.response?.data?.message || error.message;
+      const errorDetails = error.response?.data || error.message;
+      
+      logger.error('Failed to upload video directly to Bundle.social:', {
+        teamId,
+        filename: videoData.originalname,
+        error: errorDetails,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        directUpload: true
+      });
+      
+      throw new Error(`Bundle.social direct upload failed: ${errorMessage}`);
     }
   }
 
@@ -146,24 +185,109 @@ class BundleSocialService {
     }
   }
 
-  // Create a post
-  async createPost(postData) {
+  // Create immediate post (publish right now using past date)
+  async createImmediatePost(postData, retryCount = 0) {
+    const maxRetries = 2;
+    
     try {
-      const response = await this.api.post('/post/', {
+      // For immediate publishing, use past date and SCHEDULED status
+      const pastDate = new Date(Date.now() - 1000).toISOString(); // 1 second ago
+      
+      const payload = {
         teamId: postData.teamId,
-        title: postData.title || undefined,
-        postDate: postData.scheduledFor || undefined,
-        status: postData.status || 'DRAFT',
+        title: postData.title || `Post ${Date.now()}`,
+        postDate: pastDate, // Past date for immediate publishing
+        status: 'SCHEDULED', // Bundle.social publishes scheduled posts with past dates immediately
         socialAccountTypes: postData.socialAccountTypes,
         data: postData.data
-      });
+      };
 
-      logger.info('Post created in Bundle.social:', { teamId: postData.teamId, postId: response.data.id });
+      logger.info('Bundle.social Immediate Post API Request:', payload);
+      
+      if (retryCount > 0) {
+        logger.info(`Bundle.social API retry attempt ${retryCount}/${maxRetries}`);
+      }
+
+      const response = await this.api.post('/post/', payload);
+
+      logger.info('Immediate post created in Bundle.social:', { 
+        teamId: postData.teamId, 
+        postId: response.data.id,
+        publishType: 'immediate'
+      });
+      
       return response.data;
     } catch (error) {
-      logger.error('Failed to create post in Bundle.social:', error.response?.data || error.message);
-      throw new Error('Failed to create social media post');
+      return this._handlePostError(error, postData, retryCount, maxRetries, 'createImmediatePost');
     }
+  }
+
+  // Create scheduled post for future publishing
+  async createScheduledPost(postData, retryCount = 0) {
+    const maxRetries = 2;
+    
+    try {
+      const payload = {
+        teamId: postData.teamId,
+        title: postData.title || `Post ${Date.now()}`,
+        postDate: postData.scheduledFor, // Future date for scheduled publishing
+        status: 'SCHEDULED',
+        socialAccountTypes: postData.socialAccountTypes,
+        data: postData.data
+      };
+
+      logger.info('Bundle.social Scheduled Post API Request:', payload);
+      
+      if (retryCount > 0) {
+        logger.info(`Bundle.social API retry attempt ${retryCount}/${maxRetries}`);
+      }
+
+      const response = await this.api.post('/post/', payload);
+
+      logger.info('Scheduled post created in Bundle.social:', { 
+        teamId: postData.teamId, 
+        postId: response.data.id,
+        scheduledFor: postData.scheduledFor,
+        publishType: 'scheduled'
+      });
+      
+      return response.data;
+    } catch (error) {
+      return this._handlePostError(error, postData, retryCount, maxRetries, 'createScheduledPost');
+    }
+  }
+
+  // Helper method for error handling with retry logic
+  async _handlePostError(error, postData, retryCount, maxRetries, methodName) {
+    const errorDetails = error.response?.data || error.message;
+    logger.error('Bundle.social API Error:', errorDetails);
+    
+    // Handle timeout errors with retry logic
+    const isTimeoutError = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+    
+    if (isTimeoutError && retryCount < maxRetries) {
+      const waitTime = (retryCount + 1) * 5000;
+      logger.warn(`Bundle.social API timeout, retrying in ${waitTime/1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+      
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return this[methodName](postData, retryCount + 1);
+    }
+    
+    logger.error('Failed to create post in Bundle.social:', errorDetails);
+    
+    let actualErrorMessage = error.response?.data?.message || error.message;
+    
+    if (isTimeoutError) {
+      actualErrorMessage = `Bundle.social API timeout after ${maxRetries + 1} attempts. The video post may still be processing in Bundle.social.`;
+    }
+    
+    throw new Error(actualErrorMessage);
+  }
+
+  // Legacy method for backward compatibility (now uses immediate post)
+  async createPost(postData, retryCount = 0) {
+    logger.warn('Using legacy createPost method, consider using createImmediatePost or createScheduledPost');
+    return this.createImmediatePost(postData, retryCount);
   }
 
   // Update post

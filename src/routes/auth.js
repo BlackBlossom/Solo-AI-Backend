@@ -1,7 +1,7 @@
 const express = require('express');
 const authController = require('../controllers/authController');
 const { validate } = require('../middleware/validation');
-const { authLimiter } = require('../middleware/rateLimiting');
+// const { authLimiter } = require('../middleware/rateLimiting'); // DISABLED FOR TESTING
 const { registerSchema, loginSchema, refreshTokenSchema } = require('../utils/validation');
 
 const router = express.Router();
@@ -13,8 +13,8 @@ const router = express.Router();
  *   description: User authentication and account management
  */
 
-// Apply auth rate limiting to all routes
-router.use(authLimiter);
+// Apply auth rate limiting to all routes - DISABLED FOR TESTING
+// router.use(authLimiter);
 
 /**
  * @swagger

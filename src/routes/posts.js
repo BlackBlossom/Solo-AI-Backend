@@ -1,13 +1,113 @@
 const express = require('express');
 const postController = require('../controllers/postController');
+const newPostController = require('../controllers/newPostController');
 const { protect } = require('../middleware/auth');
 const { validate, validateQuery } = require('../middleware/validation');
-const { postCreateSchema, paginationSchema } = require('../utils/validation');
+const { postCreateSchema, postScheduleSchema, paginationSchema } = require('../utils/validation');
 
 const router = express.Router();
 
 /**
  * @swagger
+ * components:
+ *   schemas:
+ *     Post:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Post ID
+ *         user:
+ *           type: string
+ *           description: User ID who created the post
+ *         video:
+ *           type: object
+ *           description: Associated video information
+ *         caption:
+ *           type: string
+ *           description: Post caption/content
+ *         hashtags:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Post hashtags
+ *         platforms:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 enum: [instagram, tiktok, youtube, facebook, twitter, linkedin]
+ *               accountId:
+ *                 type: string
+ *               postId:
+ *                 type: string
+ *               publishedAt:
+ *                 type: string
+ *                 format: date-time
+ *               status:
+ *                 type: string
+ *                 enum: [pending, scheduled, published, failed]
+ *               errorMessage:
+ *                 type: string
+ *         scheduledFor:
+ *           type: string
+ *           format: date-time
+ *           description: Scheduled publication time
+ *         publishedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Actual publication time
+ *         bundlePostId:
+ *           type: string
+ *           description: Bundle.social post ID
+ *         bundleStatus:
+ *           type: string
+ *           enum: [draft, scheduled, posted, error, deleted, processing]
+ *           description: Bundle.social post status
+ *         bundleError:
+ *           type: string
+ *           description: General error message from Bundle.social
+ *         bundleErrors:
+ *           type: object
+ *           description: Platform-specific errors from Bundle.social
+ *         bundleExternalData:
+ *           type: object
+ *           description: Platform-specific post IDs and permalinks from Bundle.social
+ *         settings:
+ *           type: object
+ *           properties:
+ *             autoPublish:
+ *               type: boolean
+ *             allowComments:
+ *               type: boolean
+ *             allowLikes:
+ *               type: boolean
+ *             visibility:
+ *               type: string
+ *               enum: [public, private, unlisted]
+ *         analytics:
+ *           type: object
+ *           properties:
+ *             views:
+ *               type: number
+ *             likes:
+ *               type: number
+ *             comments:
+ *               type: number
+ *             shares:
+ *               type: number
+ *             lastUpdated:
+ *               type: string
+ *               format: date-time
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ * 
  * tags:
  *   name: Posts
  *   description: Social media post management and scheduling with Bundle.social integration
@@ -20,7 +120,7 @@ router.use(protect);
  * @swagger
  * /api/v1/posts/create:
  *   post:
- *     summary: Create a new post draft
+ *     summary: Create and publish post immediately
  *     tags: [Posts]
  *     requestBody:
  *       required: true
@@ -72,11 +172,27 @@ router.use(protect);
  *                     accountId: bundle_account_123
  *                   - name: twitter
  *                     accountId: bundle_account_456
- *               scheduledFor:
- *                 type: string
- *                 format: date-time
- *                 description: Optional scheduled publish time (must be in the future)
- *                 example: 2024-12-25T10:00:00Z
+ *               settings:
+ *                 type: object
+ *                 description: Optional post settings
+ *                 properties:
+ *                   autoPublish:
+ *                     type: boolean
+ *                     description: Auto-publish the post
+ *                     example: true
+ *                   allowComments:
+ *                     type: boolean
+ *                     description: Allow comments on the post
+ *                     example: true
+ *                   allowLikes:
+ *                     type: boolean
+ *                     description: Allow likes on the post
+ *                     example: true
+ *                   visibility:
+ *                     type: string
+ *                     enum: [public, private, unlisted]
+ *                     description: Post visibility
+ *                     example: public
  *     responses:
  *       201:
  *         description: Post created successfully
@@ -98,7 +214,8 @@ router.use(protect);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post('/create', validate(postCreateSchema), postController.createPost);
+// Immediate post creation (publish right now using past date in Bundle.social)
+router.post('/create', validate(postCreateSchema), newPostController.createImmediatePost);
 
 /**
  * @swagger
@@ -113,27 +230,46 @@ router.post('/create', validate(postCreateSchema), postController.createPost);
  *           schema:
  *             type: object
  *             required:
- *               - content
+ *               - videoId
+ *               - caption
  *               - platforms
- *               - scheduledTime
+ *               - scheduledFor
  *             properties:
- *               content:
- *                 type: string
- *                 description: Post content/caption
- *                 example: Check out this amazing video! 🎬✨
  *               videoId:
  *                 type: string
- *                 description: Associated video ID
+ *                 description: Associated video ID (required)
+ *                 example: 60f1b1b1b1b1b1b1b1b1b1b1
+ *               caption:
+ *                 type: string
+ *                 description: Post caption/content (1-2200 characters)
+ *                 minLength: 1
+ *                 maxLength: 2200
+ *                 example: Check out this amazing video! 🎬✨
  *               platforms:
  *                 type: array
+ *                 minItems: 1
  *                 items:
- *                   type: string
- *                   enum: [facebook, instagram, twitter, linkedin, tiktok, youtube]
- *                 example: ["instagram", "twitter"]
- *               scheduledTime:
+ *                   type: object
+ *                   required:
+ *                     - name
+ *                     - accountId
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       enum: [instagram, tiktok, youtube, facebook, twitter, linkedin]
+ *                       description: Platform name
+ *                     accountId:
+ *                       type: string
+ *                       description: Platform account ID from Bundle.social
+ *                 example:
+ *                   - name: instagram
+ *                     accountId: bundle_account_123
+ *                   - name: twitter
+ *                     accountId: bundle_account_456
+ *               scheduledFor:
  *                 type: string
  *                 format: date-time
- *                 description: When to publish the post
+ *                 description: When to publish the post (must be in the future)
  *                 example: "2024-01-15T14:30:00Z"
  *               hashtags:
  *                 type: array
@@ -175,7 +311,8 @@ router.post('/create', validate(postCreateSchema), postController.createPost);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/schedule', validate(postCreateSchema), postController.schedulePost);
+// Scheduled post creation (publish at future date)
+router.post('/schedule', validate(postScheduleSchema), newPostController.createScheduledPost);
 
 /**
  * @swagger
@@ -265,6 +402,71 @@ router
 
 // Post actions
 router.post('/:id/publish', postController.publishPost);
+
+/**
+ * @swagger
+ * /api/v1/posts/{id}/sync:
+ *   post:
+ *     summary: Sync post status with Bundle.social
+ *     tags: [Posts]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Post ID to sync
+ *     responses:
+ *       200:
+ *         description: Post status synced successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Post status synced successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     post:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         bundleStatus:
+ *                           type: string
+ *                           enum: [draft, scheduled, posted, error, deleted, processing]
+ *                         publishedAt:
+ *                           type: string
+ *                           format: date-time
+ *                         bundleError:
+ *                           type: string
+ *                         bundleErrors:
+ *                           type: object
+ *                         bundleExternalData:
+ *                           type: object
+ *                     changes:
+ *                       type: object
+ *                       properties:
+ *                         statusChanged:
+ *                           type: boolean
+ *                         oldStatus:
+ *                           type: string
+ *                         newStatus:
+ *                           type: string
+ *       400:
+ *         description: Post is not linked to Bundle.social
+ *       404:
+ *         description: Post not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post('/:id/sync', postController.syncPostStatus);
 
 // Post analytics
 router.get('/:id/analytics', postController.getPostAnalytics);

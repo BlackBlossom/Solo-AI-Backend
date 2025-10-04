@@ -11,7 +11,7 @@ const {
 const { formatFileSize, formatDuration } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
-// Upload video
+// Upload video directly to Bundle.social (no local storage)
 const uploadVideo = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -21,55 +21,61 @@ const uploadVideo = async (req, res, next) => {
     const { title, description } = req.body;
     const file = req.file;
 
-    // Create video record
-    const video = await Video.create({
-      user: req.user.id,
-      title,
-      description,
-      filename: file.filename,
+    logger.info('Starting direct Bundle.social video upload:', {
       originalName: file.originalname,
-      filePath: file.path,
       fileSize: file.size,
       mimeType: file.mimetype,
-      status: 'processing'
+      userId: req.user.id,
+      teamId: req.user.bundleTeamId
     });
 
-    // Upload to Bundle.social (optional for MVP)
     try {
+      // Upload directly to Bundle.social using file buffer from memory
       const bundleUpload = await bundleSocialService.uploadVideo(req.user.bundleTeamId, {
         buffer: file.buffer,
-        originalname: file.originalname
+        originalname: file.originalname,
+        mimetype: file.mimetype
       });
-      
-      video.bundleUploadId = bundleUpload.id;
-      video.status = 'completed';
-      await video.save();
-      
-      logger.info('Video uploaded to Bundle.social successfully:', { 
+
+      // Create video record with Bundle.social upload ID only
+      const video = await Video.create({
+        user: req.user.id,
+        title,
+        description,
+        originalName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        bundleUploadId: bundleUpload.id,
+        storageType: 'bundle_social_direct',
+        status: 'completed'
+      });
+
+      logger.info('Video uploaded successfully directly to Bundle.social:', { 
         videoId: video._id, 
-        bundleUploadId: bundleUpload.id 
+        bundleUploadId: bundleUpload.id,
+        userId: req.user.id,
+        storageType: 'bundle_social_direct'
       });
+
+      sendCreated(res, 'Video uploaded successfully to Bundle.social', { 
+        video: {
+          ...video.toObject(),
+          message: 'Video uploaded directly to Bundle.social without local storage'
+        }
+      });
+
     } catch (bundleError) {
-      logger.warn('Bundle.social upload failed:', bundleError.message);
-      video.status = 'completed'; // Still mark as completed for local storage
-      await video.save();
+      logger.error('Bundle.social direct upload failed:', {
+        error: bundleError.message,
+        userId: req.user.id,
+        teamId: req.user.bundleTeamId,
+        originalName: file.originalname
+      });
+
+      // Return error to user (no cleanup needed since no local file was saved)
+      return next(new Error(`Failed to upload video directly to Bundle.social: ${bundleError.message}`));
     }
 
-    // Generate AI caption if enabled
-    if (req.user.preferences?.autoGenerateCaption) {
-      try {
-        const aiCaption = await aiService.generateCaption(video);
-        video.aiGeneratedCaption = aiCaption.caption;
-        video.aiGeneratedHashtags = aiCaption.hashtags;
-        await video.save();
-      } catch (aiError) {
-        logger.warn('AI caption generation failed:', aiError.message);
-      }
-    }
-
-    logger.info('Video uploaded successfully:', { videoId: video._id, userId: req.user.id });
-
-    sendCreated(res, 'Video uploaded successfully', { video });
   } catch (error) {
     logger.error('Video upload error:', error);
     next(error);
@@ -224,25 +230,38 @@ const deleteVideo = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
-    // Delete from Bundle.social if uploaded
+    // Delete from Bundle.social if uploaded there
     if (video.bundleUploadId) {
       try {
-        // Bundle.social delete logic would go here
+        await bundleSocialService.deleteUpload(video.bundleUploadId);
         logger.info('Video deleted from Bundle.social:', { bundleUploadId: video.bundleUploadId });
       } catch (bundleError) {
         logger.warn('Failed to delete from Bundle.social:', bundleError.message);
+        // Continue with database deletion even if Bundle.social deletion fails
       }
     }
 
-    // Delete local file (in production, you might want to do this asynchronously)
-    const fs = require('fs');
-    if (fs.existsSync(video.filePath)) {
-      fs.unlinkSync(video.filePath);
+    // Delete local file only if it was stored locally (legacy videos)
+    if (video.storageType === 'local' && video.filePath) {
+      const fs = require('fs');
+      try {
+        if (fs.existsSync(video.filePath)) {
+          fs.unlinkSync(video.filePath);
+          logger.info('Local file deleted:', { filePath: video.filePath });
+        }
+      } catch (fileError) {
+        logger.warn('Failed to delete local file:', fileError.message);
+      }
     }
 
     await Video.findByIdAndDelete(req.params.id);
 
-    logger.info('Video deleted successfully:', { videoId: req.params.id, userId: req.user.id });
+    logger.info('Video deleted successfully:', { 
+      videoId: req.params.id, 
+      userId: req.user.id,
+      storageType: video.storageType,
+      bundleUploadId: video.bundleUploadId
+    });
 
     sendSuccess(res, 'Video deleted successfully');
   } catch (error) {
@@ -251,7 +270,7 @@ const deleteVideo = async (req, res, next) => {
   }
 };
 
-// Generate AI caption for video
+// Generate AI caption for video using Gemini
 const generateAICaption = async (req, res, next) => {
   try {
     const video = await Video.findOne({
@@ -263,6 +282,8 @@ const generateAICaption = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
+    const geminiService = require('../services/geminiService');
+    
     const options = {
       prompt: req.body.prompt,
       tone: req.body.tone || 'casual',
@@ -271,19 +292,20 @@ const generateAICaption = async (req, res, next) => {
       platform: req.body.platform || 'general'
     };
 
-    const aiCaption = await aiService.generateCaption(video, options);
+    const aiCaption = await geminiService.generateCaption(video, options);
 
     // Update video with AI generated content
     video.aiGeneratedCaption = aiCaption.caption;
     video.aiGeneratedHashtags = aiCaption.hashtags;
     await video.save();
 
-    logger.info('AI caption generated:', { videoId: video._id, userId: req.user.id });
+    logger.info('AI caption generated with Gemini:', { videoId: video._id, userId: req.user.id });
 
     sendSuccess(res, 'AI caption generated successfully', {
       caption: aiCaption.caption,
       hashtags: aiCaption.hashtags,
-      fullText: aiCaption.fullText
+      fullText: aiCaption.fullText,
+      model: aiCaption.model
     });
   } catch (error) {
     logger.error('Generate AI caption error:', error);

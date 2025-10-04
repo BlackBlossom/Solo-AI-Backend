@@ -52,15 +52,27 @@ const postSchema = new mongoose.Schema({
   bundlePostId: String, // ID from Bundle.social
   bundleStatus: {
     type: String,
-    enum: ['draft', 'scheduled', 'published', 'failed'],
+    enum: ['draft', 'scheduled', 'posted', 'error', 'deleted', 'processing'],
     default: 'draft'
+  },
+  bundleError: String, // General error message from Bundle.social
+  bundleErrors: {
+    type: Map,
+    of: String // Platform-specific errors
+  },
+  bundleExternalData: {
+    type: Map,
+    of: {
+      id: String,
+      permalink: String
+    }
   },
   
   // Post settings
   settings: {
     autoPublish: {
       type: Boolean,
-      default: false
+      default: true
     },
     allowComments: {
       type: Boolean,
