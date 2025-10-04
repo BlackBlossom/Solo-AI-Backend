@@ -723,6 +723,45 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
             }
           }
         },
+        AICaptionRequest: {
+          type: 'object',
+          properties: {
+            prompt: {
+              type: 'string',
+              description: 'Additional context or specific instructions for caption generation',
+              maxLength: 500,
+              example: 'Focus on lifestyle and fun vibes'
+            },
+            tone: {
+              type: 'string',
+              enum: ['professional', 'casual', 'funny', 'inspirational', 'educational'],
+              default: 'casual',
+              description: 'Tone of the generated caption',
+              example: 'casual'
+            },
+            includeHashtags: {
+              type: 'boolean',
+              default: true,
+              description: 'Whether to include relevant hashtags',
+              example: true
+            },
+            maxLength: {
+              type: 'integer',
+              minimum: 50,
+              maximum: 2200,
+              default: 300,
+              description: 'Maximum length of the generated caption',
+              example: 300
+            },
+            platform: {
+              type: 'string',
+              enum: ['general', 'instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin'],
+              default: 'general',
+              description: 'Target social media platform for optimization',
+              example: 'instagram'
+            }
+          }
+        },
         Success: {
           type: 'object',
           properties: {

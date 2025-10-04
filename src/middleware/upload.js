@@ -73,6 +73,15 @@ const uploadMemory = multer({
   }
 });
 
+// Video upload configuration for direct Bundle.social upload (no local storage)
+const uploadVideoMemory = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: videoFileFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+  }
+});
+
 // Handle multer errors
 const handleMulterError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
@@ -93,5 +102,6 @@ module.exports = {
   uploadVideo,
   uploadImage,
   uploadMemory,
+  uploadVideoMemory,
   handleMulterError
 };

@@ -132,7 +132,38 @@ const postCreateSchema = Joi.object({
     'array.min': 'At least one platform must be selected',
     'any.required': 'Platforms are required'
   }),
-  scheduledFor: Joi.date().min('now').optional(),
+  settings: Joi.object({
+    autoPublish: Joi.boolean().optional(),
+    allowComments: Joi.boolean().optional(),
+    allowLikes: Joi.boolean().optional(),
+    visibility: Joi.string().valid('public', 'private', 'unlisted').optional()
+  }).optional()
+});
+
+// Scheduled post validation schema (for /api/v1/posts/schedule)
+const postScheduleSchema = Joi.object({
+  videoId: Joi.string().required().messages({
+    'any.required': 'Video ID is required'
+  }),
+  caption: Joi.string().min(1).max(2200).required().messages({
+    'string.min': 'Caption cannot be empty',
+    'string.max': 'Caption cannot be longer than 2200 characters',
+    'any.required': 'Caption is required'
+  }),
+  hashtags: Joi.array().items(Joi.string().max(30)).max(30).optional(),
+  platforms: Joi.array().items(
+    Joi.object({
+      name: Joi.string().valid('instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin').required(),
+      accountId: Joi.string().required()
+    })
+  ).min(1).required().messages({
+    'array.min': 'At least one platform must be selected',
+    'any.required': 'Platforms are required'
+  }),
+  scheduledFor: Joi.date().min('now').required().messages({
+    'date.min': 'Scheduled date must be in the future',
+    'any.required': 'Scheduled date is required for scheduled posts'
+  }),
   settings: Joi.object({
     autoPublish: Joi.boolean().optional(),
     allowComments: Joi.boolean().optional(),
@@ -157,13 +188,22 @@ const paginationSchema = Joi.object({
   sortOrder: Joi.string().valid('asc', 'desc').default('desc')
 });
 
-// AI caption validation
+// AI caption validation (for Gemini-powered caption generation)
 const aiCaptionSchema = Joi.object({
-  videoId: Joi.string().required(),
-  prompt: Joi.string().max(500).optional(),
-  tone: Joi.string().valid('professional', 'casual', 'funny', 'inspirational', 'educational').optional(),
+  prompt: Joi.string().max(500).optional().messages({
+    'string.max': 'Prompt cannot be longer than 500 characters'
+  }),
+  tone: Joi.string().valid('professional', 'casual', 'funny', 'inspirational', 'educational').default('casual').messages({
+    'any.only': 'Tone must be one of: professional, casual, funny, inspirational, educational'
+  }),
   includeHashtags: Joi.boolean().default(true),
-  maxLength: Joi.number().integer().min(50).max(2200).default(300)
+  maxLength: Joi.number().integer().min(50).max(2200).default(300).messages({
+    'number.min': 'Maximum length must be at least 50 characters',
+    'number.max': 'Maximum length cannot exceed 2200 characters'
+  }),
+  platform: Joi.string().valid('general', 'instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin').default('general').messages({
+    'any.only': 'Platform must be one of: general, instagram, tiktok, youtube, facebook, twitter, linkedin'
+  })
 });
 
 // Refresh token validation
@@ -187,6 +227,7 @@ module.exports = {
   videoUploadSchema,
   videoEditSchema,
   postCreateSchema,
+  postScheduleSchema,
   socialAccountConnectSchema,
   paginationSchema,
   aiCaptionSchema,

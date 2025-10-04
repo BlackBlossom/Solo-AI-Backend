@@ -1,9 +1,9 @@
 const express = require('express');
 const videoController = require('../controllers/videoController');
 const { protect } = require('../middleware/auth');
-const { uploadVideo, handleMulterError } = require('../middleware/upload');
+const { uploadVideo, uploadVideoMemory, handleMulterError } = require('../middleware/upload');
 const { validate, validateVideoUpload } = require('../middleware/validation');
-const { uploadLimiter } = require('../middleware/rateLimiting');
+// const { uploadLimiter } = require('../middleware/rateLimiting');
 const { videoUploadSchema, videoEditSchema, aiCaptionSchema } = require('../utils/validation');
 
 const router = express.Router();
@@ -22,7 +22,11 @@ router.use(protect);
  * @swagger
  * /api/v1/videos/upload:
  *   post:
- *     summary: Upload a video file
+ *     summary: Upload a video file directly to Bundle.social
+ *     description: |
+ *       Upload a video file directly to Bundle.social without local storage.
+ *       The video is processed in memory and immediately uploaded to Bundle.social platform.
+ *       Only the Bundle.social upload ID is stored in the database.
  *     tags: [Videos]
  *     requestBody:
  *       required: true
@@ -31,13 +35,13 @@ router.use(protect);
  *           schema:
  *             type: object
  *             required:
- *               - video
+ *               - video  
  *               - title
  *             properties:
  *               video:
  *                 type: string
  *                 format: binary
- *                 description: Video file to upload (MP4, AVI, MOV, WMV formats supported)
+ *                 description: Video file to upload directly to Bundle.social (MP4, AVI, MOV, WMV formats supported, max 100MB)
  *               title:
  *                 type: string
  *                 description: Video title (required, 1-100 characters)
@@ -51,7 +55,7 @@ router.use(protect);
  *                 example: This is a great video about...
  *     responses:
  *       201:
- *         description: Video uploaded successfully
+ *         description: Video uploaded successfully directly to Bundle.social
  *         content:
  *           application/json:
  *             schema:
@@ -60,11 +64,28 @@ router.use(protect);
  *                 success:
  *                   type: boolean
  *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Video uploaded successfully to Bundle.social
  *                 data:
  *                   type: object
  *                   properties:
  *                     video:
- *                       $ref: '#/components/schemas/Video'
+ *                       allOf:
+ *                         - $ref: '#/components/schemas/Video'
+ *                         - type: object
+ *                           properties:
+ *                             bundleUploadId:
+ *                               type: string
+ *                               description: Bundle.social upload ID
+ *                               example: bundle_123456789
+ *                             storageType:
+ *                               type: string
+ *                               enum: [bundle_social_direct]
+ *                               example: bundle_social_direct
+ *                             message:
+ *                               type: string
+ *                               example: Video uploaded directly to Bundle.social without local storage
  *       400:
  *         description: Invalid file or validation error
  *         content:
@@ -82,8 +103,8 @@ router.use(protect);
  */
 router.post(
   '/upload',
-  uploadLimiter,
-  uploadVideo.single('video'),
+  // uploadLimiter, // DISABLED - no rate limiting requested
+  uploadVideoMemory.single('video'), // Use memory storage for direct Bundle.social upload
   handleMulterError,
   validateVideoUpload,
   validate(videoUploadSchema),
@@ -275,7 +296,8 @@ router
  * @swagger
  * /api/v1/videos/{id}/ai-caption:
  *   post:
- *     summary: Generate AI caption for video
+ *     summary: Generate AI caption for video using Gemini
+ *     description: Generate engaging social media captions using Google's Gemini AI. Customize tone, platform, and include hashtags based on your preferences.
  *     tags: [Videos]
  *     parameters:
  *       - in: path
@@ -285,29 +307,41 @@ router
  *           type: string
  *         description: Video ID
  *     requestBody:
- *       required: true
+ *       required: false
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               tone:
- *                 type: string
- *                 enum: [professional, casual, funny, inspiring]
- *                 example: casual
- *               length:
- *                 type: string
- *                 enum: [short, medium, long]
- *                 example: medium
- *               includeHashtags:
- *                 type: boolean
- *                 example: true
- *               targetAudience:
- *                 type: string
- *                 example: young adults
+ *             $ref: '#/components/schemas/AICaptionRequest'
+ *           examples:
+ *             casual_instagram:
+ *               summary: Casual Instagram Caption
+ *               description: Generate a casual caption optimized for Instagram
+ *               value:
+ *                 tone: "casual"
+ *                 platform: "instagram"
+ *                 includeHashtags: true
+ *                 maxLength: 300
+ *                 prompt: "Focus on lifestyle and fun vibes"
+ *             professional_linkedin:
+ *               summary: Professional LinkedIn Caption
+ *               description: Generate a professional caption for LinkedIn
+ *               value:
+ *                 tone: "professional"
+ *                 platform: "linkedin"
+ *                 includeHashtags: true
+ *                 maxLength: 500
+ *                 prompt: "Highlight business insights and professional growth"
+ *             funny_tiktok:
+ *               summary: Funny TikTok Caption
+ *               description: Generate a humorous caption for TikTok
+ *               value:
+ *                 tone: "funny"
+ *                 platform: "tiktok"
+ *                 includeHashtags: true
+ *                 maxLength: 200
  *     responses:
  *       200:
- *         description: AI caption generated successfully
+ *         description: AI caption generated successfully using Gemini
  *         content:
  *           application/json:
  *             schema:
@@ -316,23 +350,38 @@ router
  *                 success:
  *                   type: boolean
  *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: AI caption generated successfully
  *                 data:
  *                   type: object
  *                   properties:
  *                     caption:
  *                       type: string
- *                       example: Check out this amazing video! 🎬✨
+ *                       example: "Check out this amazing video! 🎬✨ Perfect for your daily dose of inspiration and creativity."
  *                     hashtags:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["#video", "#content", "#amazing"]
+ *                       example: ["video", "content", "amazing", "inspiration", "creativity"]
+ *                     fullText:
+ *                       type: string
+ *                       example: "Caption: Check out this amazing video! 🎬✨ Perfect for your daily dose of inspiration and creativity.\nHashtags: #video #content #amazing #inspiration #creativity"
+ *                     model:
+ *                       type: string
+ *                       example: "gemini-1.5-flash"
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  *       500:
- *         description: AI service error
+ *         description: Gemini AI service error
  *         content:
  *           application/json:
  *             schema:

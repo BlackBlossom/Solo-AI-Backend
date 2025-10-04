@@ -1,10 +1,14 @@
 const axios = require('axios');
+const logger = require('../utils/logger');
 
 const bundleSocialConfig = {
   baseURL: process.env.BUNDLE_SOCIAL_BASE_URL || 'https://api.bundle.social/api/v1',
   apiKey: process.env.BUNDLE_SOCIAL_API_KEY,
   organizationId: process.env.BUNDLE_SOCIAL_ORG_ID,
-  timeout: 30000, // 30 seconds
+  timeout: parseInt(process.env.VIDEO_UPLOAD_TIMEOUT) || 120000, // 2 minutes for video processing, configurable
+  maxRetries: parseInt(process.env.VIDEO_UPLOAD_MAX_RETRIES) || 3,
+  retryBaseDelay: parseInt(process.env.VIDEO_UPLOAD_RETRY_BASE_DELAY) || 1000,
+  retryMaxDelay: parseInt(process.env.VIDEO_UPLOAD_RETRY_MAX_DELAY) || 30000,
 };
 
 // Create axios instance for Bundle.social API
@@ -17,10 +21,12 @@ const bundleSocialAPI = axios.create({
   },
 });
 
+logger.info(`Bundle.social API configured with ${bundleSocialConfig.timeout/1000}s timeout for video processing`);
+
 // Request interceptor
 bundleSocialAPI.interceptors.request.use(
   (config) => {
-    console.log(`Bundle.social API Request: ${config.method.toUpperCase()} ${config.url}`);
+    logger.debug(`Bundle.social API Request: ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
   (error) => {
@@ -31,11 +37,11 @@ bundleSocialAPI.interceptors.request.use(
 // Response interceptor
 bundleSocialAPI.interceptors.response.use(
   (response) => {
-    console.log(`Bundle.social API Response: ${response.status} ${response.statusText}`);
+    logger.debug(`Bundle.social API Response: ${response.status} ${response.statusText}`);
     return response;
   },
   (error) => {
-    console.error('Bundle.social API Error:', error.response?.data || error.message);
+    logger.error('Bundle.social API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );

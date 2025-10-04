@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit'); // DISABLED FOR TESTING
 const path = require('path');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpecs = require('./config/swagger');
@@ -38,15 +38,15 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('combined', { stream: { write: message => logger.info(message) } }));
 }
 
-// Rate limiting
-const limiter = rateLimit({
-  max: 100, // limit each IP to 100 requests per windowMs
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many requests from this IP, please try again in an hour!',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', limiter);
+// Rate limiting - DISABLED FOR TESTING
+// const limiter = rateLimit({
+//   max: 100, // limit each IP to 100 requests per windowMs
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   message: 'Too many requests from this IP, please try again in an hour!',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use('/api/', limiter);
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));

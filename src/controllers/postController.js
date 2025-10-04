@@ -6,270 +6,14 @@ const emailService = require('../services/emailService');
 const { 
   sendSuccess, 
   sendCreated, 
-  sendBadRequest, 
+  sendError, 
   sendNotFound,
   getPaginationMeta 
 } = require('../utils/response');
 const logger = require('../utils/logger');
 
-// Create new post
-const createPost = async (req, res, next) => {
-  try {
-    const { videoId, caption, hashtags, platforms, scheduledFor, settings } = req.body;
-
-    // Verify video exists and belongs to user
-    const video = await Video.findOne({
-      _id: videoId,
-      user: req.user.id
-    });
-
-    if (!video) {
-      return sendNotFound(res, 'Video not found');
-    }
-
-    // Verify all selected platforms are connected
-    const connectedAccounts = await SocialAccount.find({
-      user: req.user.id,
-      platform: { $in: platforms.map(p => p.name) },
-      isConnected: true
-    });
-
-    const connectedPlatforms = connectedAccounts.map(acc => acc.platform);
-    const requestedPlatforms = platforms.map(p => p.name);
-    const missingPlatforms = requestedPlatforms.filter(p => !connectedPlatforms.includes(p));
-
-    if (missingPlatforms.length > 0) {
-      return sendBadRequest(res, `Not connected to: ${missingPlatforms.join(', ')}`);
-    }
-
-    // Create post record
-    const post = await Post.create({
-      user: req.user.id,
-      video: videoId,
-      caption,
-      hashtags: hashtags || [],
-      platforms: platforms.map(p => ({
-        name: p.name,
-        accountId: connectedAccounts.find(acc => acc.platform === p.name).bundleAccountId,
-        status: 'pending'
-      })),
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
-      settings: settings || {}
-    });
-
-    // Create post in Bundle.social
-    try {
-      // Get the Bundle.social platform types (uppercase)
-      const socialAccountTypes = platforms.map(p => p.name.toUpperCase());
-      
-      // Prepare platform-specific data
-      const platformData = {};
-      platforms.forEach(platform => {
-        const platformName = platform.name.toUpperCase();
-        const fullCaption = caption + (hashtags?.length ? ' ' + hashtags.map(h => `#${h}`).join(' ') : '');
-        
-        // Create platform-specific data based on Bundle.social API structure
-        switch (platformName) {
-          case 'INSTAGRAM':
-            platformData[platformName] = {
-              type: video.duration > 60 ? 'REEL' : 'POST', // Assume reels for longer videos
-              text: fullCaption,
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
-            };
-            break;
-          case 'TIKTOK':
-            platformData[platformName] = {
-              text: fullCaption,
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : [],
-              privacy: 'PUBLIC_TO_EVERYONE',
-              isBrandContent: false,
-              disableComments: false,
-              disableDuet: false,
-              disableStitch: false
-            };
-            break;
-          case 'YOUTUBE':
-            platformData[platformName] = {
-              type: video.duration <= 60 ? 'SHORT' : 'VIDEO',
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : [],
-              text: video.title || caption.substring(0, 100), // YouTube title
-              description: caption,
-              privacy: 'PUBLIC',
-              madeForKids: false
-            };
-            break;
-          case 'FACEBOOK':
-            platformData[platformName] = {
-              type: video.duration > 60 ? 'REEL' : 'POST',
-              text: fullCaption,
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
-            };
-            break;
-          case 'TWITTER':
-            platformData[platformName] = {
-              text: fullCaption.substring(0, 280), // Twitter character limit
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
-            };
-            break;
-          case 'LINKEDIN':
-            platformData[platformName] = {
-              text: fullCaption,
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : [],
-              privacy: 'PUBLIC',
-              hideFromFeed: false,
-              disableReshare: false
-            };
-            break;
-          default:
-            platformData[platformName] = {
-              text: fullCaption,
-              uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
-            };
-        }
-      });
-
-      const bundlePost = await bundleSocialService.createPost({
-        teamId: req.user.bundleTeamId,
-        title: video.title || caption.substring(0, 50),
-        scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
-        status: scheduledFor ? 'SCHEDULED' : 'DRAFT',
-        socialAccountTypes,
-        data: platformData
-      });
-
-      post.bundlePostId = bundlePost.id;
-      post.bundleStatus = bundlePost.status;
-      await post.save();
-      
-      logger.info('Post created in Bundle.social successfully:', { 
-        postId: post._id, 
-        bundlePostId: bundlePost.id 
-      });
-    } catch (bundleError) {
-      logger.warn('Bundle.social post creation failed:', bundleError.message);
-      // Continue with local post creation even if Bundle.social fails
-    }
-
-    // If not scheduled and auto-publish is enabled, update status to published
-    if (!scheduledFor && settings?.autoPublish) {
-      try {
-        // Update post status to indicate it should be published
-        post.publishedAt = new Date();
-        post.bundleStatus = 'published';
-        post.platforms.forEach(platform => {
-          platform.status = 'published';
-          platform.publishedAt = new Date();
-        });
-        await post.save();
-
-        // Send notification email
-        emailService.sendPostPublishedNotification(req.user, post).catch(err => {
-          logger.warn('Failed to send post notification:', err.message);
-        });
-        
-        logger.info('Post marked as published for auto-publish:', { postId: post._id });
-      } catch (publishError) {
-        logger.warn('Failed to update post publish status:', publishError.message);
-      }
-    }
-
-    logger.info('Post created successfully:', { postId: post._id, userId: req.user.id });
-
-    sendCreated(res, 'Post created successfully', { post });
-  } catch (error) {
-    logger.error('Create post error:', error);
-    next(error);
-  }
-};
-
-// Schedule post - following Bundle.social integration pattern
-const schedulePost = async (req, res, next) => {
-  try {
-    const { videoId, caption, hashtags, platforms, scheduledFor, settings } = req.body;
-
-    if (!scheduledFor) {
-      return sendBadRequest(res, 'scheduledFor is required for scheduling posts');
-    }
-
-    // Verify video exists and belongs to user
-    const video = await Video.findOne({
-      _id: videoId,
-      user: req.user.id
-    });
-
-    if (!video) {
-      return sendNotFound(res, 'Video not found');
-    }
-
-    // Verify all selected platforms are connected
-    const connectedAccounts = await SocialAccount.find({
-      user: req.user.id,
-      platform: { $in: platforms.map(p => p.name) },
-      isConnected: true
-    });
-
-    const connectedPlatforms = connectedAccounts.map(acc => acc.platform);
-    const requestedPlatforms = platforms.map(p => p.name);
-    const missingPlatforms = requestedPlatforms.filter(p => !connectedPlatforms.includes(p));
-
-    if (missingPlatforms.length > 0) {
-      return sendBadRequest(res, `Not connected to: ${missingPlatforms.join(', ')}`);
-    }
-
-    // Create post record
-    const post = await Post.create({
-      user: req.user.id,
-      video: videoId,
-      caption,
-      hashtags: hashtags || [],
-      platforms: platforms.map(p => ({
-        name: p.name,
-        accountId: connectedAccounts.find(acc => acc.platform === p.name).bundleAccountId,
-        status: 'scheduled'
-      })),
-      scheduledFor: new Date(scheduledFor),
-      settings: settings || {}
-    });
-
-    // Schedule post in Bundle.social
-    try {
-      const socialAccountTypes = platforms.map(p => p.name.toUpperCase());
-      const fullCaption = caption + (hashtags?.length ? ' ' + hashtags.map(h => `#${h}`).join(' ') : '');
-      
-      // Prepare platform-specific data
-      const platformData = {};
-      platforms.forEach(platform => {
-        const platformName = platform.name.toUpperCase();
-        platformData[platformName] = {
-          text: fullCaption,
-          uploadIds: video.bundleUploadId ? [video.bundleUploadId] : []
-        };
-      });
-
-      const bundlePost = await bundleSocialService.createPost({
-        teamId: req.user.bundleTeamId,
-        title: video.title || caption.substring(0, 50),
-        scheduledFor: new Date(scheduledFor).toISOString(),
-        status: 'SCHEDULED',
-        socialAccountTypes,
-        data: platformData
-      });
-
-      post.bundlePostId = bundlePost.id;
-      post.bundleStatus = 'scheduled';
-      await post.save();
-    } catch (bundleError) {
-      logger.warn('Bundle.social post scheduling failed:', bundleError.message);
-    }
-
-    logger.info('Post scheduled successfully:', { postId: post._id, userId: req.user.id, scheduledFor });
-
-    sendCreated(res, 'Post scheduled successfully', { post });
-  } catch (error) {
-    logger.error('Schedule post error:', error);
-    next(error);
-  }
-};
+// NOTE: createPost and schedulePost functions have been moved to newPostController.js 
+// with improved Bundle.social integration and proper error handling
 
 // Get user's posts - following specification pattern
 const getUserPosts = async (req, res, next) => {
@@ -305,7 +49,8 @@ const getUserPosts = async (req, res, next) => {
         if (post.bundlePostId) {
           try {
             const bundlePost = await bundleSocialService.getPost(post.bundlePostId);
-            post.bundleStatus = bundlePost.status;
+            // Convert Bundle.social status to lowercase for our model
+            post.bundleStatus = bundlePost.status ? bundlePost.status.toLowerCase() : post.bundleStatus;
             if (bundlePost.publishedAt && !post.publishedAt) {
               post.publishedAt = new Date(bundlePost.publishedAt);
             }
@@ -365,16 +110,124 @@ const getPost = async (req, res, next) => {
       return sendNotFound(res, 'Post not found');
     }
 
-    // Get latest analytics if available
+    // Sync with Bundle.social if post has Bundle ID
     if (post.bundlePostId) {
       try {
-        const analytics = await bundleSocialService.getPostAnalytics(post.bundlePostId);
+        const bundlePost = await bundleSocialService.getPost(post.bundlePostId);
         
-        post.analytics = analytics;
-        post.analytics.lastUpdated = new Date();
-        await post.save();
-      } catch (analyticsError) {
-        logger.warn('Failed to fetch post analytics:', analyticsError.message);
+        // Update post status and details from Bundle.social
+        let wasUpdated = false;
+        
+        // Update status
+        const newStatus = bundlePost.status.toLowerCase();
+        if (post.bundleStatus !== newStatus) {
+          post.bundleStatus = newStatus;
+          wasUpdated = true;
+        }
+
+        // Update published date if post is now posted
+        if (bundlePost.status === 'POSTED' && bundlePost.postedDate && !post.publishedAt) {
+          post.publishedAt = new Date(bundlePost.postedDate);
+          wasUpdated = true;
+        }
+
+        // Update individual platform statuses based on Bundle.social status
+        if (bundlePost.status === 'POSTED') {
+          post.platforms.forEach(platform => {
+            if (platform.status !== 'published') {
+              platform.status = 'published';
+              platform.publishedAt = post.publishedAt || new Date(bundlePost.postedDate);
+              // Set platform post ID if available in external data
+              if (bundlePost.externalData && bundlePost.externalData[platform.name.toUpperCase()]) {
+                platform.postId = bundlePost.externalData[platform.name.toUpperCase()].id;
+              }
+              wasUpdated = true;
+            }
+          });
+        } else if (bundlePost.status === 'ERROR') {
+          post.platforms.forEach(platform => {
+            if (platform.status !== 'failed') {
+              platform.status = 'failed';
+              // Set platform-specific error message if available
+              if (bundlePost.errors && bundlePost.errors[platform.name.toUpperCase()]) {
+                platform.errorMessage = bundlePost.errors[platform.name.toUpperCase()];
+              }
+              wasUpdated = true;
+            }
+          });
+        } else if (bundlePost.status === 'SCHEDULED') {
+          post.platforms.forEach(platform => {
+            if (platform.status !== 'scheduled') {
+              platform.status = 'scheduled';
+              wasUpdated = true;
+            }
+          });
+        }
+
+        // Update error information
+        if (bundlePost.error && post.bundleError !== bundlePost.error) {
+          post.bundleError = bundlePost.error;
+          wasUpdated = true;
+        }
+
+        // Update platform-specific errors
+        if (bundlePost.errors) {
+          if (!post.bundleErrors) {
+            post.bundleErrors = new Map();
+          }
+          
+          for (const [platform, error] of Object.entries(bundlePost.errors)) {
+            if (post.bundleErrors.get(platform) !== error) {
+              post.bundleErrors.set(platform, error);
+              wasUpdated = true;
+            }
+          }
+        }
+
+        // Update external data (platform post IDs and permalinks)
+        if (bundlePost.externalData) {
+          if (!post.bundleExternalData) {
+            post.bundleExternalData = new Map();
+          }
+          
+          for (const [platform, data] of Object.entries(bundlePost.externalData)) {
+            const currentData = post.bundleExternalData.get(platform);
+            if (!currentData || currentData.id !== data.id || currentData.permalink !== data.permalink) {
+              post.bundleExternalData.set(platform, {
+                id: data.id,
+                permalink: data.permalink
+              });
+              wasUpdated = true;
+            }
+          }
+        }
+        
+        // Get latest analytics
+        try {
+          const analytics = await bundleSocialService.getPostAnalytics(post.bundlePostId);
+          post.analytics = analytics;
+          post.analytics.lastUpdated = new Date();
+          wasUpdated = true;
+        } catch (analyticsError) {
+          logger.warn('Failed to fetch post analytics:', analyticsError.message);
+        }
+        
+        if (wasUpdated) {
+          await post.save();
+          logger.info('Post synced with Bundle.social:', { 
+            postId: post._id, 
+            bundlePostId: post.bundlePostId,
+            status: post.bundleStatus
+          });
+        }
+        
+      } catch (bundleError) {
+        logger.warn('Failed to sync with Bundle.social:', { 
+          postId: post._id, 
+          bundlePostId: post.bundlePostId,
+          error: bundleError.message 
+        });
+        // Continue with local data if Bundle.social sync fails
       }
     }
 
@@ -400,8 +253,8 @@ const updatePost = async (req, res, next) => {
     }
 
     // Check if post is already published
-    if (post.bundleStatus === 'published') {
-      return sendBadRequest(res, 'Cannot update published post');
+    if (post.bundleStatus === 'posted') {
+      return sendError(res, 400, 'Cannot update published post');
     }
 
     // Update post data
@@ -480,8 +333,8 @@ const publishPost = async (req, res, next) => {
       return sendNotFound(res, 'Post not found');
     }
 
-    if (post.bundleStatus === 'published') {
-      return sendBadRequest(res, 'Post is already published');
+    if (post.bundleStatus === 'posted') {
+      return sendError(res, 400, 'Post is already published');
     }
 
     // Update post status to published in Bundle.social
@@ -499,7 +352,7 @@ const publishPost = async (req, res, next) => {
 
     // Update local post status
     post.publishedAt = new Date();
-    post.bundleStatus = 'published';
+    post.bundleStatus = 'published'; // Already lowercase
     post.platforms.forEach(platform => {
       platform.status = 'published';
       platform.publishedAt = new Date();
@@ -652,9 +505,148 @@ const getPostsSummary = async (req, res, next) => {
   }
 };
 
+// Sync post status with Bundle.social
+const syncPostStatus = async (req, res, next) => {
+  try {
+    const post = await Post.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
+
+    if (!post) {
+      return sendNotFound(res, 'Post not found');
+    }
+
+    if (!post.bundlePostId) {
+      return sendError(res, 400, 'Post is not linked to Bundle.social');
+    }
+
+    const bundlePost = await bundleSocialService.getPost(post.bundlePostId);
+    
+    // Store old status for comparison
+    const oldStatus = post.bundleStatus;
+    let wasUpdated = false;
+    
+    // Update status
+    const newStatus = bundlePost.status.toLowerCase();
+    if (post.bundleStatus !== newStatus) {
+      post.bundleStatus = newStatus;
+      wasUpdated = true;
+    }
+
+    // Update published date if post is now posted
+    if (bundlePost.status === 'POSTED' && bundlePost.postedDate && !post.publishedAt) {
+      post.publishedAt = new Date(bundlePost.postedDate);
+      wasUpdated = true;
+    }
+
+    // Update individual platform statuses based on Bundle.social status
+    if (bundlePost.status === 'POSTED') {
+      post.platforms.forEach(platform => {
+        if (platform.status !== 'published') {
+          platform.status = 'published';
+          platform.publishedAt = post.publishedAt || new Date(bundlePost.postedDate);
+          // Set platform post ID if available in external data
+          if (bundlePost.externalData && bundlePost.externalData[platform.name.toUpperCase()]) {
+            platform.postId = bundlePost.externalData[platform.name.toUpperCase()].id;
+          }
+          wasUpdated = true;
+        }
+      });
+    } else if (bundlePost.status === 'ERROR') {
+      post.platforms.forEach(platform => {
+        if (platform.status !== 'failed') {
+          platform.status = 'failed';
+          // Set platform-specific error message if available
+          if (bundlePost.errors && bundlePost.errors[platform.name.toUpperCase()]) {
+            platform.errorMessage = bundlePost.errors[platform.name.toUpperCase()];
+          }
+          wasUpdated = true;
+        }
+      });
+    } else if (bundlePost.status === 'SCHEDULED') {
+      post.platforms.forEach(platform => {
+        if (platform.status !== 'scheduled') {
+          platform.status = 'scheduled';
+          wasUpdated = true;
+        }
+      });
+    }
+
+    // Update error information - normalize null/undefined comparison
+    const normalizedBundleError = bundlePost.error || null;
+    const normalizedPostError = post.bundleError || null;
+    if (normalizedBundleError !== normalizedPostError) {
+      post.bundleError = bundlePost.error;
+      wasUpdated = true;
+    }
+
+    // Update platform-specific errors
+    if (bundlePost.errors) {
+      if (!post.bundleErrors) {
+        post.bundleErrors = new Map();
+      }
+      
+      for (const [platform, error] of Object.entries(bundlePost.errors)) {
+        if (post.bundleErrors.get(platform) !== error) {
+          post.bundleErrors.set(platform, error);
+          wasUpdated = true;
+        }
+      }
+    }
+
+    // Update external data
+    if (bundlePost.externalData) {
+      if (!post.bundleExternalData) {
+        post.bundleExternalData = new Map();
+      }
+      
+      for (const [platform, data] of Object.entries(bundlePost.externalData)) {
+        const currentData = post.bundleExternalData.get(platform);
+        if (!currentData || currentData.id !== data.id || currentData.permalink !== data.permalink) {
+          post.bundleExternalData.set(platform, {
+            id: data.id,
+            permalink: data.permalink
+          });
+          wasUpdated = true;
+        }
+      }
+    }
+    
+    if (wasUpdated) {
+      await post.save();
+    }
+
+    logger.info('Post status synced:', { 
+      postId: post._id, 
+      oldStatus, 
+      newStatus: post.bundleStatus,
+      wasUpdated 
+    });
+
+    sendSuccess(res, 'Post status synced successfully', {
+      post: {
+        id: post._id,
+        bundleStatus: post.bundleStatus,
+        publishedAt: post.publishedAt,
+        bundleError: post.bundleError,
+        bundleErrors: Object.fromEntries(post.bundleErrors || new Map()),
+        bundleExternalData: Object.fromEntries(post.bundleExternalData || new Map())
+      },
+      changes: {
+        statusChanged: oldStatus !== post.bundleStatus,
+        oldStatus,
+        newStatus: post.bundleStatus
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error syncing post status:', error);
+    next(error);
+  }
+};
+
 module.exports = {
-  createPost,
-  schedulePost,
   getPosts,
   getUserPosts,
   getPost,
@@ -662,5 +654,6 @@ module.exports = {
   deletePost,
   publishPost,
   getPostAnalytics,
-  getPostsSummary
+  getPostsSummary,
+  syncPostStatus
 };

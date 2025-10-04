@@ -19,10 +19,10 @@ const videoSchema = new mongoose.Schema({
     maxlength: [500, 'Description cannot be longer than 500 characters']
   },
   
-  // File information
+  // File information (optional for direct Bundle.social uploads)
   filename: {
     type: String,
-    required: true
+    required: false // Made optional for direct uploads
   },
   originalName: {
     type: String,
@@ -30,7 +30,7 @@ const videoSchema = new mongoose.Schema({
   },
   filePath: {
     type: String,
-    required: true
+    required: false // Made optional for direct uploads
   },
   fileSize: {
     type: Number,
@@ -60,8 +60,26 @@ const videoSchema = new mongoose.Schema({
     default: 'uploading'
   },
   
-  // Bundle.social integration
-  bundleUploadId: String, // ID from Bundle.social after upload
+  // Bundle.social integration  
+  bundleUploadId: {
+    type: String,
+    required: false, // Made optional to support existing data and partial upload flows
+    validate: {
+      validator: function(value) {
+        // Only require bundleUploadId if storageType is bundle_social_direct
+        if (this.storageType === 'bundle_social_direct') {
+          return value && value.length > 0;
+        }
+        return true;
+      },
+      message: 'bundleUploadId is required when storageType is bundle_social_direct'
+    }
+  },
+  storageType: {
+    type: String,
+    enum: ['local', 'bundle_social_direct'],
+    default: 'bundle_social_direct' // Default to direct upload
+  },
   
   // Video editing data
   edits: {

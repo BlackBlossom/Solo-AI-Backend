@@ -1,5 +1,5 @@
 const Video = require('../models/Video');
-const aiService = require('../services/aiService');
+const geminiService = require('../services/geminiService');
 const { 
   sendSuccess, 
   sendBadRequest, 
@@ -30,8 +30,8 @@ const generateCaption = async (req, res, next) => {
       platform: platform || 'general'
     };
 
-    // Generate AI caption
-    const result = await aiService.generateCaption(video, options);
+    // Generate AI caption using Gemini
+    const result = await geminiService.generateCaption(video, options);
 
     // Update video with generated content
     video.aiGeneratedCaption = result.caption;
@@ -71,7 +71,7 @@ const generateHashtags = async (req, res, next) => {
       platform: platform || 'general'
     };
 
-    const hashtags = await aiService.generateHashtags(content, options);
+    const hashtags = await geminiService.generateHashtags(content, options);
 
     logger.info('AI hashtags generated:', { 
       userId: req.user.id,
@@ -102,7 +102,8 @@ const optimizeCaption = async (req, res, next) => {
       return sendBadRequest(res, 'Platform is required for optimization');
     }
 
-    const optimizedCaption = await aiService.optimizeForPlatform(caption, platform);
+    // Use Gemini to optimize caption for platform
+    const optimizedCaption = await geminiService.optimizeForPlatform(caption, platform);
 
     logger.info('Caption optimized for platform:', { 
       userId: req.user.id,
@@ -144,7 +145,7 @@ const getVideoSuggestions = async (req, res, next) => {
     await Promise.all(
       platforms.map(async (platform) => {
         try {
-          const result = await aiService.generateCaption(video, {
+          const result = await geminiService.generateCaption(video, {
             platform,
             tone: 'casual',
             includeHashtags: true,
@@ -230,7 +231,8 @@ const analyzeContent = async (req, res, next) => {
 const getAIStatus = async (req, res, next) => {
   try {
     const status = {
-      available: !!process.env.OPENAI_API_KEY,
+      available: !!process.env.GEMINI_API_KEY,
+      model: 'gemini-2.5-flash',
       capabilities: {
         captionGeneration: true,
         hashtagGeneration: true,
