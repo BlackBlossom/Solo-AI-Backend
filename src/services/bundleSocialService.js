@@ -68,13 +68,25 @@ class BundleSocialService {
   }
 
   // Disconnect social media account
-  async disconnectSocialAccount(disconnectData) {
+  async disconnectSocialAccount(type, teamId) {
     try {
-      await this.api.delete('/social-account/disconnect', { data: disconnectData });
-      logger.info('Social account disconnected:', disconnectData);
+      // Bundle.social expects type (platform) and teamId in request body
+      const response = await this.api.delete('/social-account/disconnect', {
+        data: {
+          type: type.toUpperCase(), // Must be uppercase: TIKTOK, YOUTUBE, INSTAGRAM, etc.
+          teamId: teamId
+        }
+      });
+      
+      logger.info('Social account disconnected from Bundle.social:', { type, teamId });
+      return response.data;
     } catch (error) {
-      logger.error('Failed to disconnect social account:', error.response?.data || error.message);
-      throw new Error('Failed to disconnect social account');
+      logger.error('Failed to disconnect social account:', {
+        error: error.response?.data || error.message,
+        type,
+        teamId
+      });
+      throw new Error(`Failed to disconnect social account: ${error.response?.data?.message || error.message}`);
     }
   }
 
@@ -171,6 +183,33 @@ class BundleSocialService {
     } catch (error) {
       logger.error('Failed to get upload:', error.response?.data || error.message);
       throw new Error('Failed to retrieve upload information');
+    }
+  }
+
+  // Get upload list for team
+  async getUploads(teamId, filters = {}) {
+    try {
+      const params = { teamId };
+      
+      // Add optional filters
+      if (filters.type) params.type = filters.type; // 'image' or 'video'
+      if (filters.status) params.status = filters.status; // 'USED' or 'UNUSED'
+      
+      const response = await this.api.get('/upload/', { params });
+      
+      logger.info('Fetched uploads from Bundle.social:', { 
+        teamId, 
+        count: response.data?.length || 0,
+        filters 
+      });
+      
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to get uploads:', {
+        teamId,
+        error: error.response?.data || error.message
+      });
+      throw new Error('Failed to retrieve uploads list');
     }
   }
 

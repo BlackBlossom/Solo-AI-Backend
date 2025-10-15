@@ -37,7 +37,7 @@ const uploadVideo = async (req, res, next) => {
         mimetype: file.mimetype
       });
 
-      // Create video record with Bundle.social upload ID only
+      // Create video record with Bundle.social upload ID and thumbnail data
       const video = await Video.create({
         user: req.user.id,
         title,
@@ -47,7 +47,15 @@ const uploadVideo = async (req, res, next) => {
         mimeType: file.mimetype,
         bundleUploadId: bundleUpload.id,
         storageType: 'bundle_social_direct',
-        status: 'completed'
+        status: 'completed',
+        // Store thumbnail data from Bundle.social response
+        thumbnailUrl: bundleUpload.thumbnailUrl,
+        iconUrl: bundleUpload.iconUrl,
+        dimensions: {
+          width: bundleUpload.width,
+          height: bundleUpload.height
+        },
+        duration: bundleUpload.videoLength // Bundle.social returns duration as videoLength
       });
 
       logger.info('Video uploaded successfully directly to Bundle.social:', { 
@@ -356,6 +364,158 @@ const getVideoAnalytics = async (req, res, next) => {
   }
 };
 
+// Get all uploads from Bundle.social and sync with database
+const getAllUploads = async (req, res, next) => {
+  try {
+    const { type, status } = req.query; // Optional filters: type (image/video), status (USED/UNUSED)
+
+    if (!req.user.bundleTeamId) {
+      return sendBadRequest(res, 'Bundle.social team not configured');
+    }
+
+    logger.info('Fetching uploads from Bundle.social:', {
+      userId: req.user.id,
+      teamId: req.user.bundleTeamId,
+      filters: { type, status }
+    });
+
+    // Fetch uploads from Bundle.social
+    const bundleUploads = await bundleSocialService.getUploads(req.user.bundleTeamId, {
+      type,
+      status
+    });
+
+    // Sync video uploads with local database
+    const videoUploads = bundleUploads.filter(upload => upload.type === 'video');
+    const syncedVideoIds = [];
+    
+    for (const upload of videoUploads) {
+      // Check if video exists in local database
+      let existingVideo = await Video.findOne({ 
+        bundleUploadId: upload.id,
+        user: req.user.id 
+      });
+      
+      if (existingVideo) {
+        // Update video with latest data from Bundle.social
+        let hasChanges = false;
+
+        if (!existingVideo.thumbnailUrl || existingVideo.thumbnailUrl !== upload.thumbnailUrl) {
+          existingVideo.thumbnailUrl = upload.thumbnailUrl;
+          hasChanges = true;
+        }
+
+        if (!existingVideo.iconUrl || existingVideo.iconUrl !== upload.iconUrl) {
+          existingVideo.iconUrl = upload.iconUrl;
+          hasChanges = true;
+        }
+
+        if (!existingVideo.dimensions || !existingVideo.dimensions.width) {
+          if (upload.width && upload.height) {
+            existingVideo.dimensions = {
+              width: upload.width,
+              height: upload.height
+            };
+            hasChanges = true;
+          }
+        }
+
+        if (!existingVideo.duration && upload.videoLength) {
+          existingVideo.duration = upload.videoLength;
+          hasChanges = true;
+        }
+
+        if (!existingVideo.fileSize && upload.fileSize) {
+          existingVideo.fileSize = upload.fileSize;
+          hasChanges = true;
+        }
+
+        if (!existingVideo.mimeType && upload.mime) {
+          existingVideo.mimeType = upload.mime;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          await existingVideo.save();
+          logger.info('Updated existing video with Bundle.social data:', {
+            videoId: existingVideo._id,
+            bundleUploadId: upload.id
+          });
+        }
+
+        syncedVideoIds.push(existingVideo._id);
+      } else {
+        // Create new video record for uploads not in database
+        try {
+          const newVideo = await Video.create({
+            user: req.user.id,
+            title: upload.ext ? `Upload ${Date.now()}.${upload.ext}` : `Upload ${Date.now()}`,
+            description: 'Synced from Bundle.social',
+            originalName: upload.path ? upload.path.split('/').pop() : `upload_${upload.id}`,
+            fileSize: upload.fileSize || 0,
+            mimeType: upload.mime || 'video/mp4',
+            bundleUploadId: upload.id,
+            storageType: 'bundle_social_direct',
+            status: 'completed',
+            thumbnailUrl: upload.thumbnailUrl,
+            iconUrl: upload.iconUrl,
+            dimensions: upload.width && upload.height ? {
+              width: upload.width,
+              height: upload.height
+            } : undefined,
+            duration: upload.videoLength
+          });
+
+          syncedVideoIds.push(newVideo._id);
+          
+          logger.info('Created new video from Bundle.social upload:', {
+            videoId: newVideo._id,
+            bundleUploadId: upload.id
+          });
+        } catch (createError) {
+          logger.error('Failed to create video from upload:', {
+            bundleUploadId: upload.id,
+            error: createError.message
+          });
+        }
+      }
+    }
+
+    // Fetch all synced videos from database
+    const dbVideos = await Video.find({
+      _id: { $in: syncedVideoIds }
+    }).sort({ createdAt: -1 });
+
+    // Get additional statistics from Bundle.social data
+    const imageUploads = bundleUploads.filter(u => u.type === 'image');
+    const usedUploads = bundleUploads.filter(u => u.posts && u.posts.length > 0);
+    const unusedUploads = bundleUploads.filter(u => !u.posts || u.posts.length === 0);
+
+    logger.info('Uploads synced and retrieved from database:', {
+      total: bundleUploads.length,
+      videos: dbVideos.length,
+      images: imageUploads.length,
+      synced: syncedVideoIds.length
+    });
+
+    sendSuccess(res, 'Uploads retrieved successfully', {
+      videos: dbVideos, // Return videos from database
+      images: imageUploads, // Return images from Bundle.social (not stored in Video model)
+      summary: {
+        total: bundleUploads.length,
+        videos: dbVideos.length,
+        images: imageUploads.length,
+        used: usedUploads.length,
+        unused: unusedUploads.length,
+        synced: syncedVideoIds.length
+      }
+    });
+  } catch (error) {
+    logger.error('Get all uploads error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   uploadVideo,
   getVideos,
@@ -364,5 +524,6 @@ module.exports = {
   updateVideo,
   deleteVideo,
   generateAICaption,
-  getVideoAnalytics
+  getVideoAnalytics,
+  getAllUploads
 };
