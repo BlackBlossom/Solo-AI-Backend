@@ -220,6 +220,63 @@ const deleteAccountSchema = Joi.object({
   })
 });
 
+// Email OTP validation schemas
+const sendEmailOtpSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'any.required': 'Email is required'
+  })
+});
+
+const verifyEmailOtpSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'any.required': 'Email is required'
+  }),
+  otp: Joi.string().length(6).pattern(/^[0-9]+$/).required().messages({
+    'string.length': 'OTP must be exactly 6 digits',
+    'string.pattern.base': 'OTP must contain only numbers',
+    'any.required': 'OTP is required'
+  })
+});
+
+// Password reset OTP validation schemas
+const sendPasswordResetOtpSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'any.required': 'Email is required'
+  })
+});
+
+const verifyPasswordResetOtpSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'any.required': 'Email is required'
+  }),
+  otp: Joi.string().length(6).pattern(/^[0-9]+$/).required().messages({
+    'string.length': 'OTP must be exactly 6 digits',
+    'string.pattern.base': 'OTP must contain only numbers',
+    'any.required': 'OTP is required'
+  })
+});
+
+// Reset password with OTP schema (simplified - no OTP in body, checked internally)
+const resetPasswordSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'any.required': 'Email is required'
+  }),
+  password: Joi.string().min(8).pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*])')).required().messages({
+    'string.min': 'Password must be at least 8 characters long',
+    'string.pattern.base': 'Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character',
+    'any.required': 'New password is required'
+  }),
+  confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+    'any.only': 'Passwords do not match',
+    'any.required': 'Password confirmation is required'
+  })
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
@@ -232,5 +289,10 @@ module.exports = {
   paginationSchema,
   aiCaptionSchema,
   refreshTokenSchema,
-  deleteAccountSchema
+  deleteAccountSchema,
+  sendEmailOtpSchema,
+  verifyEmailOtpSchema,
+  sendPasswordResetOtpSchema,
+  verifyPasswordResetOtpSchema,
+  resetPasswordSchema
 };

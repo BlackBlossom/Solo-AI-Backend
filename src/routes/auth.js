@@ -2,7 +2,16 @@ const express = require('express');
 const authController = require('../controllers/authController');
 const { validate } = require('../middleware/validation');
 // const { authLimiter } = require('../middleware/rateLimiting'); // DISABLED FOR TESTING
-const { registerSchema, loginSchema, refreshTokenSchema } = require('../utils/validation');
+const { 
+  registerSchema, 
+  loginSchema, 
+  refreshTokenSchema,
+  sendEmailOtpSchema,
+  verifyEmailOtpSchema,
+  sendPasswordResetOtpSchema,
+  verifyPasswordResetOtpSchema,
+  resetPasswordSchema
+} = require('../utils/validation');
 
 const router = express.Router();
 
@@ -222,9 +231,60 @@ router.post('/refresh-token', validate(refreshTokenSchema), authController.refre
 
 /**
  * @swagger
- * /api/v1/auth/forgot-password:
+ * /api/v1/auth/reset-password:
  *   post:
- *     summary: Request password reset
+ *     summary: Reset password after OTP verification
+ *     description: Reset password using email and new password. OTP must be verified first using /verify-password-reset-otp endpoint. This endpoint checks if OTP was verified internally.
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *               - confirmPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address
+ *                 example: john@example.com
+ *               password:
+ *                 type: string
+ *                 description: New password must contain at least one lowercase letter, one uppercase letter, one number, and one special character
+ *                 minLength: 8
+ *                 example: NewPassword123!
+ *               confirmPassword:
+ *                 type: string
+ *                 description: Confirm new password (must match password)
+ *                 minLength: 8
+ *                 example: NewPassword123!
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Success'
+ *       400:
+ *         description: OTP not verified, passwords don't match, or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
+
+/**
+ * @swagger
+ * /api/v1/auth/send-email-otp:
+ *   post:
+ *     summary: Send OTP for email verification
+ *     description: Send a 6-digit OTP code to verify email address. OTP expires in 10 minutes.
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -242,21 +302,44 @@ router.post('/refresh-token', validate(refreshTokenSchema), authController.refre
  *                 example: john@example.com
  *     responses:
  *       200:
- *         description: Password reset email sent
+ *         description: OTP sent successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Success'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent to your email address
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: Please check your email for the verification code
+ *                     expiresIn:
+ *                       type: string
+ *                       example: 10 minutes
+ *       400:
+ *         description: Email already verified or error sending email
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.post('/forgot-password', authController.forgotPassword);
+router.post('/send-email-otp', validate(sendEmailOtpSchema), authController.sendEmailOtp);
 
 /**
  * @swagger
- * /api/v1/auth/reset-password:
+ * /api/v1/auth/verify-email-otp:
  *   post:
- *     summary: Reset password using token
+ *     summary: Verify email using OTP
+ *     description: Verify email address using the 6-digit OTP code sent to the email.
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -266,32 +349,158 @@ router.post('/forgot-password', authController.forgotPassword);
  *           schema:
  *             type: object
  *             required:
- *               - token
- *               - password
+ *               - email
+ *               - otp
  *             properties:
- *               token:
+ *               email:
  *                 type: string
- *                 description: Password reset token
- *               password:
+ *                 format: email
+ *                 example: john@example.com
+ *               otp:
  *                 type: string
- *                 description: New password must contain at least one lowercase letter, one uppercase letter, one number, and one special character
- *                 minLength: 8
- *                 example: NewPassword123!
+ *                 description: 6-digit OTP code
+ *                 example: "123456"
  *     responses:
  *       200:
- *         description: Password reset successful
+ *         description: Email verified successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Success'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Email verified successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     emailVerified:
+ *                       type: boolean
+ *                       example: true
  *       400:
- *         description: Invalid or expired token
+ *         description: Invalid or expired OTP
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/reset-password', authController.resetPassword);
+router.post('/verify-email-otp', validate(verifyEmailOtpSchema), authController.verifyEmailOtp);
+
+/**
+ * @swagger
+ * /api/v1/auth/send-password-reset-otp:
+ *   post:
+ *     summary: Send OTP for password reset
+ *     description: Send a 6-digit OTP code for password reset. OTP expires in 10 minutes. After receiving the OTP, verify it using /verify-password-reset-otp, then reset password using /reset-password.
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john@example.com
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Password reset OTP sent to your email
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: Please check your email for the 6-digit verification code
+ *                     expiresIn:
+ *                       type: string
+ *                       example: 10 minutes
+ *       400:
+ *         description: Error sending email or social login account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.post('/send-password-reset-otp', validate(sendPasswordResetOtpSchema), authController.sendPasswordResetOtp);
+
+/**
+ * @swagger
+ * /api/v1/auth/verify-password-reset-otp:
+ *   post:
+ *     summary: Verify password reset OTP
+ *     description: Verify the 6-digit OTP code for password reset. Must be called before /reset-password when using OTP method.
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john@example.com
+ *               otp:
+ *                 type: string
+ *                 description: 6-digit OTP code
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: OTP verified successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: You can now reset your password
+ *                     verified:
+ *                       type: boolean
+ *                       example: true
+ *       400:
+ *         description: Invalid or expired OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/verify-password-reset-otp', validate(verifyPasswordResetOtpSchema), authController.verifyPasswordResetOtp);
 
 // Protected routes (require authentication)
 const { protect } = require('../middleware/auth');
@@ -383,5 +592,101 @@ router.patch('/update-password', authController.updatePassword);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/me', authController.getMe);
+
+/**
+ * @swagger
+ * /api/v1/auth/bundle-status:
+ *   get:
+ *     summary: Check Bundle.social registration status
+ *     description: Check if the user has completed Bundle.social integration setup
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Bundle.social status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Bundle.social status retrieved
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: object
+ *                       properties:
+ *                         bundleRegistered:
+ *                           type: boolean
+ *                           example: false
+ *                         hasTeamId:
+ *                           type: boolean
+ *                           example: false
+ *                         hasOrganizationId:
+ *                           type: boolean
+ *                           example: false
+ *                         bundleTeamId:
+ *                           type: string
+ *                           nullable: true
+ *                           example: null
+ *                         bundleOrganizationId:
+ *                           type: string
+ *                           nullable: true
+ *                           example: null
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/bundle-status', authController.getBundleStatus);
+
+/**
+ * @swagger
+ * /api/v1/auth/register-bundle:
+ *   post:
+ *     summary: Manually register Bundle.social integration
+ *     description: Trigger Bundle.social organization and team creation without uploading a video
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Bundle.social registered successfully or already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Bundle.social registered successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     bundleTeamId:
+ *                       type: string
+ *                       example: "team_abc123"
+ *                     bundleOrganizationId:
+ *                       type: string
+ *                       example: "org_xyz789"
+ *                     organization:
+ *                       type: object
+ *                       description: Bundle.social organization details
+ *                     message:
+ *                       type: string
+ *                       example: Bundle.social integration is now active. You can now upload videos and create posts.
+ *       400:
+ *         description: Failed to register Bundle.social
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post('/register-bundle', authController.registerBundle);
 
 module.exports = router;

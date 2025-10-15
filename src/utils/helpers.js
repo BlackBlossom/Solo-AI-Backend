@@ -83,6 +83,16 @@ const sleep = (ms) => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
 
+// Generate 6-digit OTP
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Hash OTP for storage
+const hashOtp = (otp) => {
+  return crypto.createHash('sha256').update(otp).digest('hex');
+};
+
 // Deep clone object
 const deepClone = (obj) => {
   return JSON.parse(JSON.stringify(obj));
@@ -113,6 +123,8 @@ module.exports = {
   extractHashtags,
   truncateText,
   sleep,
+  generateOtp,
+  hashOtp,
   deepClone,
   removeUndefined
 };

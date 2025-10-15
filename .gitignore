@@ -47,3 +47,5 @@ tmp/
 temp/
 *.txt
 *.md
+test-email.js
+test-otp-emails.js
