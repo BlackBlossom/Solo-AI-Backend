@@ -1,71 +1,51 @@
-const nodemailer = require('nodemailer');
+// Using Resend for production (SMTP has connection timeout issues on Railway)
+const { Resend } = require('resend');
 const logger = require('../utils/logger');
 
 class EmailService {
   constructor() {
-    this.transporter = null;
-    this.fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'noreply@example.com';
-    this.fromName = process.env.SMTP_FROM_NAME || 'Video Editing Platform';
-    this.initializeTransporter();
+    this.resend = null;
+    this.fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    this.fromName = process.env.RESEND_FROM_NAME || 'Video Editing Platform';
+    this.initializeResend();
   }
 
-  // Initialize Nodemailer SMTP transporter for Gmail
-  initializeTransporter() {
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      logger.warn('SMTP credentials not provided. Email service will be disabled.');
-      logger.warn('Please configure SMTP_HOST, SMTP_USER, and SMTP_PASS in your .env file');
+  // Initialize Resend
+  initializeResend() {
+    if (!process.env.RESEND_API_KEY) {
+      logger.warn('RESEND_API_KEY not provided. Email service will be disabled.');
+      logger.warn('Please configure RESEND_API_KEY in your .env file');
       return;
     }
 
     try {
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        },
-        tls: {
-          // Do not fail on invalid certs (for development)
-          rejectUnauthorized: process.env.NODE_ENV === 'production'
-        }
-      });
-
-      // Verify connection configuration
-      this.transporter.verify((error, success) => {
-        if (error) {
-          logger.error('SMTP connection failed:', error.message);
-          logger.error('Please check your Gmail SMTP credentials and app password');
-        } else {
-          logger.info('Gmail SMTP email service initialized successfully');
-          logger.info(`Email service ready to send from: ${this.fromEmail}`);
-        }
-      });
+      this.resend = new Resend(process.env.RESEND_API_KEY);
+      logger.info('Resend email service initialized successfully');
+      logger.info(`Email service ready to send from: ${this.fromEmail}`);
     } catch (error) {
-      logger.error('Failed to initialize email transporter:', error.message);
-      this.transporter = null;
+      logger.error('Failed to initialize Resend:', error.message);
+      this.resend = null;
     }
   }
 
   // Send welcome email
   async sendWelcomeEmail(user) {
-    if (!this.transporter) {
+    if (!this.resend) {
       logger.warn('Email service not available - skipping welcome email');
       return { success: false, message: 'Email service not configured' };
     }
 
     try {
-      const result = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const result = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
         to: user.email,
         subject: 'Welcome to Video Editing Platform!',
         html: this.getWelcomeEmailTemplate(user)
       });
 
-      logger.info('Welcome email sent successfully:', { userId: user._id, email: user.email, messageId: result.messageId });
+      logger.info('Welcome email sent successfully:', { userId: user._id, email: user.email, id: result.id });
       
-      return { success: true, messageId: result.messageId };
+      return { success: true, id: result.id };
     } catch (error) {
       logger.error('Failed to send welcome email:', error);
       return { success: false, error: error.message };
@@ -74,7 +54,7 @@ class EmailService {
 
   // Send email verification
   async sendEmailVerification(user, verificationToken) {
-    if (!this.transporter) {
+    if (!this.resend) {
       logger.warn('Email service not available - skipping email verification');
       return { success: false, message: 'Email service not configured' };
     }
@@ -82,16 +62,16 @@ class EmailService {
     try {
       const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
       
-      const result = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const result = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
         to: user.email,
         subject: 'Verify Your Email Address',
         html: this.getEmailVerificationTemplate(user, verificationUrl)
       });
 
-      logger.info('Email verification sent successfully:', { userId: user._id, email: user.email, messageId: result.messageId });
+      logger.info('Email verification sent successfully:', { userId: user._id, email: user.email, id: result.id });
       
-      return { success: true, messageId: result.messageId };
+      return { success: true, id: result.id };
     } catch (error) {
       logger.error('Failed to send email verification:', error);
       return { success: false, error: error.message };
@@ -100,21 +80,21 @@ class EmailService {
 
   // Send post published notification
   async sendPostPublishedNotification(user, post) {
-    if (!this.transporter) {
+    if (!this.resend) {
       return { success: false, message: 'Email service not configured' };
     }
 
     try {
-      const result = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const result = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
         to: user.email,
         subject: 'Your Video Has Been Published!',
         html: this.getPostPublishedTemplate(user, post)
       });
 
-      logger.info('Post published notification sent:', { userId: user._id, postId: post._id, messageId: result.messageId });
+      logger.info('Post published notification sent:', { userId: user._id, postId: post._id, id: result.id });
       
-      return { success: true, messageId: result.messageId };
+      return { success: true, id: result.id };
     } catch (error) {
       logger.error('Failed to send post notification:', error);
       return { success: false, error: error.message };
@@ -123,22 +103,22 @@ class EmailService {
 
   // Send OTP email for email verification
   async sendEmailOtp(user, otp) {
-    if (!this.transporter) {
+    if (!this.resend) {
       logger.warn('Email service not available - skipping OTP email');
       return { success: false, message: 'Email service not configured' };
     }
 
     try {
-      const result = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const result = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
         to: user.email,
         subject: 'Verify Your Email - OTP Code',
         html: this.getEmailOtpTemplate(user, otp)
       });
 
-      logger.info('Email OTP sent successfully:', { userId: user._id, email: user.email, messageId: result.messageId });
+      logger.info('Email OTP sent successfully:', { userId: user._id, email: user.email, id: result.id });
       
-      return { success: true, messageId: result.messageId };
+      return { success: true, id: result.id };
     } catch (error) {
       logger.error('Failed to send email OTP:', error);
       return { success: false, error: error.message };
@@ -147,22 +127,22 @@ class EmailService {
 
   // Send password reset OTP
   async sendPasswordResetOtp(user, otp) {
-    if (!this.transporter) {
+    if (!this.resend) {
       logger.warn('Email service not available - skipping password reset OTP');
       return { success: false, message: 'Email service not configured' };
     }
 
     try {
-      const result = await this.transporter.sendMail({
-        from: `"${this.fromName}" <${this.fromEmail}>`,
+      const result = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
         to: user.email,
         subject: 'Password Reset OTP Code',
         html: this.getPasswordResetOtpTemplate(user, otp)
       });
 
-      logger.info('Password reset OTP sent successfully:', { userId: user._id, email: user.email, messageId: result.messageId });
+      logger.info('Password reset OTP sent successfully:', { userId: user._id, email: user.email, id: result.id });
       
-      return { success: true, messageId: result.messageId };
+      return { success: true, id: result.id };
     } catch (error) {
       logger.error('Failed to send password reset OTP:', error);
       return { success: false, error: error.message };
