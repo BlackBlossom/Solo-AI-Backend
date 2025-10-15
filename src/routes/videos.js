@@ -115,6 +115,113 @@ router.post(
 
 /**
  * @swagger
+ * /api/v1/videos/uploads:
+ *   get:
+ *     summary: Get all uploads from Bundle.social
+ *     description: |
+ *       Fetch all uploads (images and videos) from Bundle.social for the authenticated user's team.
+ *       Automatically syncs thumbnail data with local database for videos.
+ *     tags: [Videos]
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [image, video]
+ *         description: Filter by upload type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [USED, UNUSED]
+ *         description: Filter by usage status (USED = used in posts, UNUSED = not used)
+ *     responses:
+ *       200:
+ *         description: Uploads retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Uploads retrieved successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     uploads:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             description: Bundle.social upload ID
+ *                           teamId:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                             enum: [image, video]
+ *                           thumbnailUrl:
+ *                             type: string
+ *                             description: URL to thumbnail image
+ *                           iconUrl:
+ *                             type: string
+ *                             description: URL to small icon/preview
+ *                           url:
+ *                             type: string
+ *                             description: URL to full media file
+ *                           width:
+ *                             type: number
+ *                           height:
+ *                             type: number
+ *                           fileSize:
+ *                             type: number
+ *                           videoLength:
+ *                             type: number
+ *                             description: Video duration in seconds
+ *                           mime:
+ *                             type: string
+ *                           ext:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           posts:
+ *                             type: array
+ *                             description: Posts using this upload
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 postId:
+ *                                   type: string
+ *                                 uploadId:
+ *                                   type: string
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: number
+ *                         videos:
+ *                           type: number
+ *                         images:
+ *                           type: number
+ *                         used:
+ *                           type: number
+ *                         unused:
+ *                           type: number
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/uploads', videoController.getAllUploads);
+
+/**
+ * @swagger
  * /api/v1/videos/user/{id}:
  *   get:
  *     summary: Get videos by user ID

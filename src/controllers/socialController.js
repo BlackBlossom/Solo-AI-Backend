@@ -52,28 +52,46 @@ const disconnectAccount = async (req, res, next) => {
       return sendNotFound(res, 'Social account not found');
     }
 
-    // Disconnect from Bundle.social
+    // Disconnect from Bundle.social first
     try {
-      await bundleSocialService.disconnectSocialAccount({
-        teamId: req.user.bundleTeamId,
-        socialAccountId: socialAccount.bundleAccountId
+      await bundleSocialService.disconnectSocialAccount(
+        socialAccount.platform, // Platform type (instagram, tiktok, etc.)
+        req.user.bundleTeamId
+      );
+      logger.info('Successfully disconnected from Bundle.social:', {
+        platform: socialAccount.platform,
+        teamId: req.user.bundleTeamId
       });
     } catch (bundleError) {
-      logger.warn('Failed to disconnect from Bundle.social:', bundleError.message);
+      logger.error('Failed to disconnect from Bundle.social:', bundleError.message);
+      // Continue to delete from local DB even if Bundle.social fails
     }
 
-    // Update account status
-    socialAccount.isConnected = false;
-    socialAccount.isActive = false;
-    await socialAccount.save();
+    // Delete the social account from local database
+    await SocialAccount.deleteOne({ _id: accountId });
 
-    logger.info('Social account disconnected:', {
+    // Remove from user's socialAccounts array
+    const user = await User.findById(req.user.id);
+    if (user && user.socialAccounts) {
+      user.socialAccounts = user.socialAccounts.filter(
+        acc => acc.socialAccountId !== socialAccount.bundleAccountId
+      );
+      await user.save();
+    }
+
+    logger.info('Social account disconnected and deleted:', {
       userId: req.user.id,
       platform: socialAccount.platform,
       accountId: socialAccount._id
     });
 
-    sendSuccess(res, 'Account disconnected successfully');
+    sendSuccess(res, 'Account disconnected and removed successfully', {
+      deletedAccount: {
+        id: socialAccount._id,
+        platform: socialAccount.platform,
+        username: socialAccount.platformUsername
+      }
+    });
   } catch (error) {
     logger.error('Disconnect social account error:', error);
     next(error);
@@ -200,6 +218,29 @@ const getConnectedAccounts = async (req, res, next) => {
       syncedAccounts.push(localAccount);
     }
 
+    // Clean up local accounts that no longer exist in Bundle.social
+    const bundleAccountIds = bundleAccounts.map(ba => ba.id);
+    const localAccountsToDelete = await SocialAccount.find({
+      user: req.user.id,
+      bundleAccountId: { $nin: bundleAccountIds }
+    });
+
+    if (localAccountsToDelete.length > 0) {
+      logger.info('Removing disconnected accounts from local DB:', {
+        count: localAccountsToDelete.length,
+        accounts: localAccountsToDelete.map(acc => ({
+          id: acc._id,
+          platform: acc.platform,
+          username: acc.platformUsername
+        }))
+      });
+
+      await SocialAccount.deleteMany({
+        user: req.user.id,
+        bundleAccountId: { $nin: bundleAccountIds }
+      });
+    }
+
     // Update user's socialAccounts array in User model
     const user = await User.findById(req.user.id);
     user.socialAccounts = syncedAccounts.map(account => ({
@@ -212,7 +253,8 @@ const getConnectedAccounts = async (req, res, next) => {
     await user.save();
 
     sendSuccess(res, 'Connected accounts retrieved', {
-      accounts: syncedAccounts
+      accounts: syncedAccounts,
+      cleaned: localAccountsToDelete.length
     });
   } catch (error) {
     logger.error('Get connected accounts error:', error);

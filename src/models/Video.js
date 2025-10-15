@@ -52,6 +52,8 @@ const videoSchema = new mongoose.Schema({
   
   // Thumbnail
   thumbnailPath: String,
+  thumbnailUrl: String, // Bundle.social thumbnail URL
+  iconUrl: String, // Bundle.social icon URL (smaller preview)
   
   // Processing status
   status: {
