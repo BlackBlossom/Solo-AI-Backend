@@ -10,7 +10,7 @@ const {
   sendUnauthorized, 
   sendNotFound 
 } = require('../utils/response');
-const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../utils/helpers');
+const { generateToken, generateRefreshToken, verifyRefreshToken, generateOtp, hashOtp } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
 // Register new user
@@ -24,20 +24,12 @@ const register = async (req, res, next) => {
       return sendBadRequest(res, 'User with this email already exists');
     }
 
-    // Setup organization for user
-    const orgData = await organizationService.setupUserOrganization({ 
-      name, 
-      email,
-      _id: 'temp' // Will be replaced with actual ID after user creation
-    });
-
     // Create user data based on login type
     const userData = {
       name,
       email,
       loginType,
-      bundleOrganizationId: orgData.bundleOrganizationId,
-      bundleTeamId: orgData.bundleTeamId
+      bundleRegistered: false // Will be set to true when Bundle.social setup is completed
     };
 
     // Only add password for email registration
@@ -45,7 +37,7 @@ const register = async (req, res, next) => {
       userData.password = password;
     }
 
-    // Create user
+    // Create user (without Bundle.social setup)
     const user = await User.create(userData);
 
     // Generate tokens
@@ -76,7 +68,8 @@ const register = async (req, res, next) => {
       user,
       accessToken,
       refreshToken,
-      organization: orgData.teamData
+      bundleRegistered: false,
+      message: 'You can start using the app. Bundle.social integration will be set up when you upload your first video.'
     });
   } catch (error) {
     logger.error('Registration error:', error);
@@ -228,75 +221,35 @@ const logout = async (req, res, next) => {
   }
 };
 
-// Forgot password
-const forgotPassword = async (req, res, next) => {
-  try {
-    const { email } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return sendNotFound(res, 'No user found with that email address');
-    }
-
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Hash the token and save to database
-    user.passwordResetToken = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
-    
-    user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-    
-    await user.save({ validateBeforeSave: false });
-
-    // Send password reset email
-    const emailResult = await emailService.sendPasswordResetEmail(user, resetToken);
-    
-    if (!emailResult.success) {
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-      
-      return sendBadRequest(res, 'There was an error sending the email. Please try again later.');
-    }
-
-    logger.info('Password reset email sent:', { userId: user._id, email: user.email });
-
-    sendSuccess(res, 'Password reset token sent to email');
-  } catch (error) {
-    logger.error('Forgot password error:', error);
-    next(error);
-  }
-};
-
-// Reset password
+// Reset password (Simplified - only requires email and password after OTP verification)
 const resetPassword = async (req, res, next) => {
   try {
-    const { token, password } = req.body;
+    const { email, password, confirmPassword } = req.body;
 
-    // Hash the token
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      return sendBadRequest(res, 'Passwords do not match');
+    }
 
-    // Find user with valid reset token
+    // Find user with verified OTP
     const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() }
+      email,
+      passwordResetOtpVerified: true,
+      passwordResetOtpExpires: { $gt: Date.now() } // OTP should still be valid
     });
 
     if (!user) {
-      return sendBadRequest(res, 'Token is invalid or has expired');
+      return sendBadRequest(res, 'Password reset not authorized. Please verify your OTP first.');
     }
 
     // Update password
     user.password = password;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
     user.passwordChangedAt = Date.now();
+    
+    // Clear OTP fields
+    user.passwordResetOtp = undefined;
+    user.passwordResetOtpExpires = undefined;
+    user.passwordResetOtpVerified = undefined;
 
     await user.save();
 
@@ -306,7 +259,8 @@ const resetPassword = async (req, res, next) => {
     logger.info('Password reset successfully:', { userId: user._id });
 
     sendSuccess(res, 'Password reset successful', {
-      token: jwtToken
+      token: jwtToken,
+      message: 'Your password has been reset successfully. You can now login with your new password.'
     });
   } catch (error) {
     logger.error('Reset password error:', error);
@@ -353,13 +307,276 @@ const getMe = async (req, res) => {
   sendSuccess(res, 'User data retrieved', { user });
 };
 
+// Get Bundle.social registration status
+const getBundleStatus = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return sendNotFound(res, 'User not found');
+    }
+
+    const status = {
+      bundleRegistered: user.bundleRegistered || false,
+      hasTeamId: !!user.bundleTeamId,
+      hasOrganizationId: !!user.bundleOrganizationId,
+      bundleTeamId: user.bundleTeamId || null,
+      bundleOrganizationId: user.bundleOrganizationId || null
+    };
+
+    logger.info('Bundle.social status checked:', { userId: user._id, status: status.bundleRegistered });
+
+    sendSuccess(res, 'Bundle.social status retrieved', { status });
+  } catch (error) {
+    logger.error('Get Bundle status error:', error);
+    next(error);
+  }
+};
+
+// Manually trigger Bundle.social registration
+const registerBundle = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return sendNotFound(res, 'User not found');
+    }
+
+    // Check if already registered
+    if (user.bundleRegistered && user.bundleTeamId && user.bundleOrganizationId) {
+      return sendSuccess(res, 'Bundle.social already registered', {
+        bundleTeamId: user.bundleTeamId,
+        bundleOrganizationId: user.bundleOrganizationId,
+        message: 'Your Bundle.social integration is already active'
+      });
+    }
+
+    // Setup Bundle.social
+    logger.info('Manual Bundle.social registration triggered:', { userId: user._id });
+
+    const orgData = await organizationService.setupUserOrganization({
+      name: user.name,
+      email: user.email,
+      _id: user._id
+    });
+
+    // Update user
+    user.bundleOrganizationId = orgData.bundleOrganizationId;
+    user.bundleTeamId = orgData.bundleTeamId;
+    user.bundleRegistered = true;
+    await user.save({ validateBeforeSave: false });
+
+    logger.info('Manual Bundle.social registration completed:', {
+      userId: user._id,
+      teamId: user.bundleTeamId
+    });
+
+    sendSuccess(res, 'Bundle.social registered successfully', {
+      bundleTeamId: user.bundleTeamId,
+      bundleOrganizationId: user.bundleOrganizationId,
+      organization: orgData.teamData,
+      message: 'Bundle.social integration is now active. You can now upload videos and create posts.'
+    });
+  } catch (error) {
+    logger.error('Register Bundle error:', error);
+    
+    // Provide more specific error message
+    if (error.message.includes('Bundle.social')) {
+      return sendBadRequest(res, 'Failed to register with Bundle.social. Please try again later.');
+    }
+    
+    next(error);
+  }
+};
+
+// Send email verification OTP
+const sendEmailOtp = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return sendNotFound(res, 'No user found with that email address');
+    }
+
+    // Check if email is already verified
+    if (user.emailVerified) {
+      return sendBadRequest(res, 'Email is already verified');
+    }
+
+    // Generate 6-digit OTP
+    const otp = generateOtp();
+    
+    // Hash the OTP and save to database
+    user.emailOtp = hashOtp(otp);
+    user.emailOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP email
+    const emailResult = await emailService.sendEmailOtp(user, otp);
+    
+    if (!emailResult.success) {
+      user.emailOtp = undefined;
+      user.emailOtpExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      
+      return sendBadRequest(res, 'There was an error sending the email. Please try again later.');
+    }
+
+    logger.info('Email verification OTP sent:', { userId: user._id, email: user.email });
+
+    sendSuccess(res, 'OTP sent to your email address', { 
+      message: 'Please check your email for the verification code',
+      expiresIn: '10 minutes'
+    });
+  } catch (error) {
+    logger.error('Send email OTP error:', error);
+    next(error);
+  }
+};
+
+// Verify email OTP
+const verifyEmailOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!otp || otp.length !== 6) {
+      return sendBadRequest(res, 'Please provide a valid 6-digit OTP');
+    }
+
+    // Hash the provided OTP
+    const hashedOtp = hashOtp(otp);
+
+    // Find user with valid OTP
+    const user = await User.findOne({
+      email,
+      emailOtp: hashedOtp,
+      emailOtpExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return sendBadRequest(res, 'Invalid or expired OTP');
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailOtp = undefined;
+    user.emailOtpExpires = undefined;
+
+    await user.save({ validateBeforeSave: false });
+
+    logger.info('Email verified successfully:', { userId: user._id, email: user.email });
+
+    sendSuccess(res, 'Email verified successfully', {
+      emailVerified: true
+    });
+  } catch (error) {
+    logger.error('Verify email OTP error:', error);
+    next(error);
+  }
+};
+
+// Send password reset OTP (replaces old forgotPassword token method)
+const sendPasswordResetOtp = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return sendNotFound(res, 'No user found with that email address');
+    }
+
+    // Check if user is using email login
+    if (user.loginType !== 'email') {
+      return sendBadRequest(res, `This account uses ${user.loginType} login. Password reset is not available for social logins.`);
+    }
+
+    // Generate 6-digit OTP
+    const otp = generateOtp();
+    
+    // Hash the OTP and save to database
+    user.passwordResetOtp = hashOtp(otp);
+    user.passwordResetOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.passwordResetOtpVerified = false;
+    
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP email
+    const emailResult = await emailService.sendPasswordResetOtp(user, otp);
+    
+    if (!emailResult.success) {
+      user.passwordResetOtp = undefined;
+      user.passwordResetOtpExpires = undefined;
+      user.passwordResetOtpVerified = false;
+      await user.save({ validateBeforeSave: false });
+      
+      return sendBadRequest(res, 'There was an error sending the email. Please try again later.');
+    }
+
+    logger.info('Password reset OTP sent:', { userId: user._id, email: user.email });
+
+    sendSuccess(res, 'Password reset OTP sent to your email', { 
+      message: 'Please check your email for the verification code',
+      expiresIn: '10 minutes'
+    });
+  } catch (error) {
+    logger.error('Send password reset OTP error:', error);
+    next(error);
+  }
+};
+
+// Verify password reset OTP
+const verifyPasswordResetOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!otp || otp.length !== 6) {
+      return sendBadRequest(res, 'Please provide a valid 6-digit OTP');
+    }
+
+    // Hash the provided OTP
+    const hashedOtp = hashOtp(otp);
+
+    // Find user with valid OTP
+    const user = await User.findOne({
+      email,
+      passwordResetOtp: hashedOtp,
+      passwordResetOtpExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return sendBadRequest(res, 'Invalid or expired OTP');
+    }
+
+    // Mark OTP as verified (but don't clear it yet - needed for password reset)
+    user.passwordResetOtpVerified = true;
+    await user.save({ validateBeforeSave: false });
+
+    logger.info('Password reset OTP verified:', { userId: user._id, email: user.email });
+
+    sendSuccess(res, 'OTP verified successfully', {
+      message: 'You can now reset your password',
+      verified: true
+    });
+  } catch (error) {
+    logger.error('Verify password reset OTP error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   refreshToken,
   logout,
-  forgotPassword,
   resetPassword,
   updatePassword,
-  getMe
+  getMe,
+  getBundleStatus,
+  registerBundle,
+  sendEmailOtp,
+  verifyEmailOtp,
+  sendPasswordResetOtp,
+  verifyPasswordResetOtp
 };

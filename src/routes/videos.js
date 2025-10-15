@@ -1,6 +1,7 @@
 const express = require('express');
 const videoController = require('../controllers/videoController');
 const { protect } = require('../middleware/auth');
+const { ensureBundleSetup } = require('../middleware/bundleSetup');
 const { uploadVideo, uploadVideoMemory, handleMulterError } = require('../middleware/upload');
 const { validate, validateVideoUpload } = require('../middleware/validation');
 // const { uploadLimiter } = require('../middleware/rateLimiting');
@@ -104,6 +105,7 @@ router.use(protect);
 router.post(
   '/upload',
   // uploadLimiter, // DISABLED - no rate limiting requested
+  ensureBundleSetup, // Ensure Bundle.social is set up before upload
   uploadVideoMemory.single('video'), // Use memory storage for direct Bundle.social upload
   handleMulterError,
   validateVideoUpload,

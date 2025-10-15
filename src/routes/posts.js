@@ -2,6 +2,7 @@ const express = require('express');
 const postController = require('../controllers/postController');
 const newPostController = require('../controllers/newPostController');
 const { protect } = require('../middleware/auth');
+const { ensureBundleSetup } = require('../middleware/bundleSetup');
 const { validate, validateQuery } = require('../middleware/validation');
 const { postCreateSchema, postScheduleSchema, paginationSchema } = require('../utils/validation');
 
@@ -215,7 +216,7 @@ router.use(protect);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Immediate post creation (publish right now using past date in Bundle.social)
-router.post('/create', validate(postCreateSchema), newPostController.createImmediatePost);
+router.post('/create', ensureBundleSetup, validate(postCreateSchema), newPostController.createImmediatePost);
 
 /**
  * @swagger
@@ -312,7 +313,7 @@ router.post('/create', validate(postCreateSchema), newPostController.createImmed
  *               $ref: '#/components/schemas/Error'
  */
 // Scheduled post creation (publish at future date)
-router.post('/schedule', validate(postScheduleSchema), newPostController.createScheduledPost);
+router.post('/schedule', ensureBundleSetup, validate(postScheduleSchema), newPostController.createScheduledPost);
 
 /**
  * @swagger

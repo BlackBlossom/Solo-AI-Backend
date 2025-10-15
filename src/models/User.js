@@ -69,9 +69,17 @@ const userSchema = new mongoose.Schema({
   },
   emailVerificationToken: String,
   
-  // Password reset
-  passwordResetToken: String,
-  passwordResetExpires: Date,
+  // Email OTP verification
+  emailOtp: String,
+  emailOtpExpires: Date,
+  
+  // Password reset OTP (removed token-based fields)
+  passwordResetOtp: String,
+  passwordResetOtpExpires: Date,
+  passwordResetOtpVerified: {
+    type: Boolean,
+    default: false
+  },
   passwordChangedAt: Date,
   
   // Refresh token for JWT
@@ -85,15 +93,20 @@ const userSchema = new mongoose.Schema({
   },
   lockUntil: Date,
   
-  // Bundle.social integration
+  // Bundle.social integration (optional - created on-demand)
   bundleOrganizationId: {
     type: String,
-    required: true
+    required: false
   },
   bundleTeamId: {
     type: String,
-    required: true,
+    required: false,
+    sparse: true, // Allows multiple null values while maintaining uniqueness for non-null values
     unique: true
+  },
+  bundleRegistered: {
+    type: Boolean,
+    default: false
   },
   
   // For analytics and social accounts - following specification
