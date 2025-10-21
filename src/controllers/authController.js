@@ -95,7 +95,32 @@ const login = async (req, res, next) => {
       return sendUnauthorized(res, `This account is registered with ${user.loginType} login. Please use the correct login method.`);
     }
 
-    // Check if account is locked
+    // Check if ban has expired and auto-reactivate
+    const banCheck = await user.checkBanExpiry();
+    
+    // Check account status after expiry check
+    if (user.status === 'banned') {
+      const statusMessage = user.getAccountStatusMessage();
+      logger.warn('Banned user attempted login:', { 
+        userId: user._id, 
+        email: user.email,
+        banReason: user.banReason,
+        banExpiry: user.banExpiry
+      });
+      return sendUnauthorized(res, statusMessage);
+    }
+    
+    if (user.status === 'suspended') {
+      const statusMessage = user.getAccountStatusMessage();
+      logger.warn('Suspended user attempted login:', { 
+        userId: user._id, 
+        email: user.email,
+        banReason: user.banReason
+      });
+      return sendUnauthorized(res, statusMessage);
+    }
+
+    // Check if account is locked (too many failed attempts)
     if (user.isLocked) {
       return sendUnauthorized(res, 'Account is temporarily locked due to too many failed login attempts');
     }

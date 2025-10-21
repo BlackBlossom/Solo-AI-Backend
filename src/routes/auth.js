@@ -118,6 +118,23 @@ router.post('/register', validate(registerSchema), authController.register);
  *       - **Email**: Requires password
  *       - **Google**: Only requires email (OAuth handled externally)
  *       - **Apple**: Only requires email (OAuth handled externally)
+ *       
+ *       ## Account Status Validation
+ *       Login validates the account status and will reject banned or suspended accounts:
+ *       
+ *       - **Active**: Login proceeds normally
+ *       - **Banned**: Login rejected with ban details (reason and expiry date if temporary)
+ *       - **Suspended**: Login rejected with suspension details
+ *       - **Locked**: Login rejected if too many failed attempts (temporary 2-hour lock)
+ *       
+ *       ## Automatic Ban Expiry
+ *       If a ban has expired, the account is automatically reactivated before login validation.
+ *       
+ *       ## Status-Based Error Messages
+ *       - Banned (temporary): "Your account has been banned. Reason: [reason]. This ban will expire on [date]."
+ *       - Banned (permanent): "Your account has been banned. Reason: [reason]. This is a permanent ban."
+ *       - Suspended: "Your account has been suspended. Reason: [reason]"
+ *       - Locked: "Account is temporarily locked due to too many failed login attempts"
  *     tags: [Authentication]
  *     security: []
  *     requestBody:
@@ -170,11 +187,49 @@ router.post('/register', validate(registerSchema), authController.register);
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Invalid credentials
+ *         description: |
+ *           Authentication failed. This can occur for multiple reasons:
+ *           
+ *           - **Invalid credentials**: Wrong email or password
+ *           - **Account banned**: User account has been banned by admin
+ *           - **Account suspended**: User account has been suspended by admin
+ *           - **Account locked**: Too many failed login attempts (temporary 2-hour lock)
+ *           - **Wrong login type**: Account registered with different method (email/google/apple)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               invalid_credentials:
+ *                 summary: Invalid Credentials
+ *                 value:
+ *                   success: false
+ *                   message: "Invalid email or password"
+ *               account_banned_temporary:
+ *                 summary: Account Banned (Temporary)
+ *                 value:
+ *                   success: false
+ *                   message: "Your account has been banned. Reason: Spamming multiple posts. This ban will expire on 11/18/2025."
+ *               account_banned_permanent:
+ *                 summary: Account Banned (Permanent)
+ *                 value:
+ *                   success: false
+ *                   message: "Your account has been banned. Reason: Serious terms violation. This is a permanent ban."
+ *               account_suspended:
+ *                 summary: Account Suspended
+ *                 value:
+ *                   success: false
+ *                   message: "Your account has been suspended. Reason: Under investigation"
+ *               account_locked:
+ *                 summary: Account Locked (Failed Attempts)
+ *                 value:
+ *                   success: false
+ *                   message: "Account is temporarily locked due to too many failed login attempts"
+ *               wrong_login_type:
+ *                 summary: Wrong Login Type
+ *                 value:
+ *                   success: false
+ *                   message: "This account is registered with google login. Please use the correct login method."
  */
 router.post('/login', validate(loginSchema), authController.login);
 

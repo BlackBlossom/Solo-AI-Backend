@@ -5,6 +5,7 @@ const {
   sendNotFound,
   getPaginationMeta 
 } = require('../utils/response');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
 const logger = require('../utils/logger');
 
 // Get user profile
@@ -111,25 +112,70 @@ const uploadProfilePicture = async (req, res, next) => {
       return sendBadRequest(res, 'Please upload a profile picture');
     }
 
-    const profilePicturePath = `/uploads/thumbnails/${req.file.filename}`;
+    logger.info('Starting profile picture upload to Cloudinary:', {
+      userId: req.user.id,
+      originalName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype
+    });
 
+    // Get current user to check if they have an existing profile picture
+    const currentUser = await User.findById(req.user.id);
+    if (!currentUser) {
+      return sendNotFound(res, 'User not found');
+    }
+
+    // Delete old profile picture from Cloudinary if it exists
+    if (currentUser.profilePicture && currentUser.profilePicture.includes('cloudinary.com')) {
+      try {
+        // Extract public ID from Cloudinary URL
+        const urlParts = currentUser.profilePicture.split('/');
+        const publicIdWithExtension = urlParts.slice(-2).join('/'); // Get folder/filename
+        const publicId = publicIdWithExtension.split('.')[0]; // Remove extension
+        
+        await deleteFromCloudinary(publicId, 'image');
+        logger.info('Deleted old profile picture from Cloudinary:', { publicId });
+      } catch (deleteError) {
+        logger.warn('Failed to delete old profile picture:', deleteError.message);
+        // Continue with upload even if deletion fails
+      }
+    }
+
+    // Upload to Cloudinary
+    const uploadResult = await uploadToCloudinary(req.file, {
+      type: 'image',
+      folder: 'solo-ai/profiles', // Custom folder for profile pictures
+      prefix: `profile-${req.user.id}`
+    });
+
+    if (!uploadResult.success) {
+      return sendBadRequest(res, 'Failed to upload profile picture');
+    }
+
+    // Update user with Cloudinary URL
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { profilePicture: profilePicturePath },
+      { profilePicture: uploadResult.url },
       {
         new: true,
         runValidators: true
       }
     );
 
-    if (!user) {
-      return sendNotFound(res, 'User not found');
-    }
-
-    logger.info('Profile picture uploaded:', { userId: user._id, path: profilePicturePath });
+    logger.info('Profile picture uploaded successfully:', { 
+      userId: user._id, 
+      url: uploadResult.url,
+      publicId: uploadResult.publicId 
+    });
 
     sendSuccess(res, 'Profile picture uploaded successfully', {
-      profilePicture: user.profilePicture
+      profilePicture: user.profilePicture,
+      cloudinary: {
+        publicId: uploadResult.publicId,
+        format: uploadResult.format,
+        width: uploadResult.width,
+        height: uploadResult.height
+      }
     });
   } catch (error) {
     logger.error('Upload profile picture error:', error);

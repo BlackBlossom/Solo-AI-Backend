@@ -73,6 +73,44 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
         description: '💻 Development Server'
       }
     ],
+    tags: [
+      {
+        name: 'Admin Authentication',
+        description: '🔐 Admin login, logout, and token management'
+      },
+      {
+        name: 'Admin Dashboard',
+        description: '📊 Dashboard statistics and overview'
+      },
+      {
+        name: 'Admin Media',
+        description: '🖼️ Media management (images, stickers, GIFs, audio, fonts)'
+      },
+      {
+        name: 'Admin Users',
+        description: '👥 User management and moderation'
+      },
+      {
+        name: 'Admin Videos',
+        description: '🎥 Video content management'
+      },
+      {
+        name: 'Admin Posts',
+        description: '📱 Social media post management'
+      },
+      {
+        name: 'Admin Analytics',
+        description: '📈 Analytics and reporting'
+      },
+      {
+        name: 'Admin Settings',
+        description: '⚙️ System settings and configuration'
+      },
+      {
+        name: 'Admin Activity',
+        description: '📝 Activity logs and audit trails'
+      }
+    ],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -129,11 +167,31 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
               default: 'email',
               example: 'email'
             },
+            status: {
+              type: 'string',
+              enum: ['active', 'banned', 'suspended'],
+              description: 'Account status - active (normal access), banned (prohibited), suspended (restricted)',
+              default: 'active',
+              example: 'active'
+            },
+            banReason: {
+              type: 'string',
+              description: 'Reason for ban or suspension (shown to user when attempting login)',
+              nullable: true,
+              example: 'Violation of terms of service'
+            },
+            banExpiry: {
+              type: 'string',
+              format: 'date-time',
+              description: 'When the ban expires (null for permanent bans or active accounts)',
+              nullable: true,
+              example: '2025-11-18T22:59:55.000Z'
+            },
             profilePicture: {
               type: 'string',
-              description: 'URL to profile picture',
+              description: 'Cloudinary URL to profile picture',
               nullable: true,
-              example: 'https://example.com/uploads/profile.jpg'
+              example: 'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/solo-ai/profiles/profile-123_456789.jpg'
             },
             emailVerified: {
               type: 'boolean',

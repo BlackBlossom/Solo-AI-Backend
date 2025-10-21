@@ -1,152 +1,244 @@
-// Using Resend for production (SMTP has connection timeout issues on Railway)
+// Email service with support for both Resend and SMTP
 const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
+const configService = require('./configService');
 
 class EmailService {
   constructor() {
     this.resend = null;
-    this.fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    this.fromName = process.env.RESEND_FROM_NAME || 'Video Editing Platform';
-    this.initializeResend();
+    this.smtpTransporter = null;
+    this.provider = 'resend'; // Default provider
+    this.fromEmail = 'noreply@soloai.com';
+    this.fromName = 'Solo AI';
+    this.initialized = false;
   }
 
-  // Initialize Resend
-  initializeResend() {
-    if (!process.env.RESEND_API_KEY) {
-      logger.warn('RESEND_API_KEY not provided. Email service will be disabled.');
-      logger.warn('Please configure RESEND_API_KEY in your .env file');
-      return;
+  /**
+   * Initialize email service based on settings
+   * Automatically detects provider from database settings
+   */
+  async initialize() {
+    try {
+      const emailConfig = await configService.getEmailConfig();
+      
+      // Debug log for troubleshooting (can be commented out in production)
+      // logger.info('Email config fetched:', { 
+      //   provider: emailConfig?.provider,
+      //   hasResendConfig: !!emailConfig?.resend,
+      //   hasResendApiKey: !!emailConfig?.resend?.apiKey,
+      //   hasSMTPConfig: !!emailConfig?.smtp
+      // });
+      
+      this.provider = emailConfig.provider || 'resend';
+
+      if (this.provider === 'smtp') {
+        this.fromEmail = emailConfig.smtp?.fromEmail || 'noreply@soloai.com';
+        this.fromName = emailConfig.smtp?.fromName || 'Solo AI';
+        await this.initializeSMTP(emailConfig.smtp);
+      } else {
+        this.fromEmail = emailConfig.resend?.fromEmail || 'noreply@soloai.com';
+        this.fromName = emailConfig.resend?.fromName || 'Solo AI';
+        await this.initializeResend(emailConfig.resend);
+      }
+
+      // Mark as initialized even if no valid email provider configured
+      // The service will gracefully handle email sending by checking provider availability
+      this.initialized = true;
+      
+      if (this.resend || this.smtpTransporter) {
+        logger.info(`Email service initialized with ${this.provider.toUpperCase()} provider (${this.fromEmail})`);
+      } else {
+        logger.warn('Email service initialized but no valid provider configured. Emails will not be sent.');
+      }
+    } catch (error) {
+      logger.warn('Email service initialization encountered an issue:', error.message);
+      logger.warn('Application will continue without email functionality.');
+      this.initialized = true; // Mark as initialized to prevent repeated attempts
+    }
+  }
+
+  /**
+   * Initialize Resend email provider
+   */
+  async initializeResend(resendConfig) {
+    // Debug log for troubleshooting (can be commented out in production)
+    // logger.info('Resend config received:', { 
+    //   hasConfig: !!resendConfig, 
+    //   hasApiKey: !!resendConfig?.apiKey,
+    //   apiKeyLength: resendConfig?.apiKey?.length || 0,
+    //   apiKeyPrefix: resendConfig?.apiKey?.substring(0, 6) || 'none'
+    // });
+
+    if (!resendConfig?.apiKey) {
+      logger.warn('Resend API key not provided. Email service will be disabled.');
+      this.resend = null;
+      return; // Return gracefully without throwing
     }
 
     try {
-      this.resend = new Resend(process.env.RESEND_API_KEY);
-      logger.info('Resend email service initialized successfully');
-      logger.info(`Email service ready to send from: ${this.fromEmail}`);
+      this.resend = new Resend(resendConfig.apiKey);
+      logger.info('Resend email provider initialized successfully');
     } catch (error) {
       logger.error('Failed to initialize Resend:', error.message);
+      // Detailed error logging (can be commented out in production)
+      // logger.error('Resend error details:', {
+      //   message: error.message,
+      //   stack: error.stack,
+      //   name: error.name
+      // });
       this.resend = null;
+      // Don't throw - allow service to continue without email
     }
+  }
+
+  /**
+   * Initialize SMTP email provider
+   */
+  async initializeSMTP(smtpConfig) {
+    if (!smtpConfig?.host || !smtpConfig?.user || !smtpConfig?.pass) {
+      logger.warn('SMTP configuration incomplete. Email service will be disabled.');
+      this.smtpTransporter = null;
+      return; // Return gracefully without throwing
+    }
+
+    try {
+      this.smtpTransporter = nodemailer.createTransport({
+        host: smtpConfig.host,
+        port: smtpConfig.port || 587,
+        secure: smtpConfig.secure || false,
+        auth: {
+          user: smtpConfig.user,
+          pass: smtpConfig.pass
+        }
+      });
+
+      // Verify connection
+      await this.smtpTransporter.verify();
+      logger.info('SMTP email provider initialized and verified successfully');
+    } catch (error) {
+      logger.error('Failed to initialize SMTP:', error.message);
+      this.smtpTransporter = null;
+      // Don't throw - allow service to continue without email
+    }
+  }
+
+  /**
+   * Reinitialize email service (call after settings update)
+   */
+  async reinitialize() {
+    logger.info('Reinitializing email service with updated settings...');
+    this.initialized = false;
+    this.resend = null;
+    this.smtpTransporter = null;
+    await this.initialize();
+  }
+
+  /**
+   * Send email using configured provider
+   */
+  async sendEmail(to, subject, html) {
+    // Ensure service is initialized
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!this.initialized) {
+      logger.warn('Email service not available - skipping email');
+      return { success: false, message: 'Email service not configured' };
+    }
+
+    try {
+      if (this.provider === 'smtp' && this.smtpTransporter) {
+        return await this.sendViaSMTP(to, subject, html);
+      } else if (this.provider === 'resend' && this.resend) {
+        return await this.sendViaResend(to, subject, html);
+      } else {
+        logger.error(`No valid email provider configured. Provider: ${this.provider}`);
+        return { success: false, message: 'No email provider configured' };
+      }
+    } catch (error) {
+      logger.error('Failed to send email:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Send email via Resend
+   */
+  async sendViaResend(to, subject, html) {
+    const result = await this.resend.emails.send({
+      from: `${this.fromName} <${this.fromEmail}>`,
+      to,
+      subject,
+      html
+    });
+
+    logger.info('Email sent via Resend:', { to, subject, id: result.id });
+    return { success: true, id: result.id, provider: 'resend' };
+  }
+
+  /**
+   * Send email via SMTP
+   */
+  async sendViaSMTP(to, subject, html) {
+    const result = await this.smtpTransporter.sendMail({
+      from: `${this.fromName} <${this.fromEmail}>`,
+      to,
+      subject,
+      html
+    });
+
+    logger.info('Email sent via SMTP:', { to, subject, messageId: result.messageId });
+    return { success: true, messageId: result.messageId, provider: 'smtp' };
   }
 
   // Send welcome email
   async sendWelcomeEmail(user) {
-    if (!this.resend) {
-      logger.warn('Email service not available - skipping welcome email');
-      return { success: false, message: 'Email service not configured' };
-    }
-
-    try {
-      const result = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: user.email,
-        subject: 'Welcome to Video Editing Platform!',
-        html: this.getWelcomeEmailTemplate(user)
-      });
-
-      logger.info('Welcome email sent successfully:', { userId: user._id, email: user.email, id: result.id });
-      
-      return { success: true, id: result.id };
-    } catch (error) {
-      logger.error('Failed to send welcome email:', error);
-      return { success: false, error: error.message };
-    }
+    return await this.sendEmail(
+      user.email,
+      'Welcome to Video Editing Platform!',
+      this.getWelcomeEmailTemplate(user)
+    );
   }
 
   // Send email verification
   async sendEmailVerification(user, verificationToken) {
-    if (!this.resend) {
-      logger.warn('Email service not available - skipping email verification');
-      return { success: false, message: 'Email service not configured' };
-    }
-
-    try {
-      const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-      
-      const result = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: user.email,
-        subject: 'Verify Your Email Address',
-        html: this.getEmailVerificationTemplate(user, verificationUrl)
-      });
-
-      logger.info('Email verification sent successfully:', { userId: user._id, email: user.email, id: result.id });
-      
-      return { success: true, id: result.id };
-    } catch (error) {
-      logger.error('Failed to send email verification:', error);
-      return { success: false, error: error.message };
-    }
+    const urls = await configService.getUrls();
+    const verificationUrl = `${urls.frontendUrl || process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    
+    return await this.sendEmail(
+      user.email,
+      'Verify Your Email Address',
+      this.getEmailVerificationTemplate(user, verificationUrl)
+    );
   }
 
   // Send post published notification
   async sendPostPublishedNotification(user, post) {
-    if (!this.resend) {
-      return { success: false, message: 'Email service not configured' };
-    }
-
-    try {
-      const result = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: user.email,
-        subject: 'Your Video Has Been Published!',
-        html: this.getPostPublishedTemplate(user, post)
-      });
-
-      logger.info('Post published notification sent:', { userId: user._id, postId: post._id, id: result.id });
-      
-      return { success: true, id: result.id };
-    } catch (error) {
-      logger.error('Failed to send post notification:', error);
-      return { success: false, error: error.message };
-    }
+    return await this.sendEmail(
+      user.email,
+      'Your Video Has Been Published!',
+      this.getPostPublishedTemplate(user, post)
+    );
   }
 
   // Send OTP email for email verification
   async sendEmailOtp(user, otp) {
-    if (!this.resend) {
-      logger.warn('Email service not available - skipping OTP email');
-      return { success: false, message: 'Email service not configured' };
-    }
-
-    try {
-      const result = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: user.email,
-        subject: 'Verify Your Email - OTP Code',
-        html: this.getEmailOtpTemplate(user, otp)
-      });
-
-      logger.info('Email OTP sent successfully:', { userId: user._id, email: user.email, id: result.id });
-      
-      return { success: true, id: result.id };
-    } catch (error) {
-      logger.error('Failed to send email OTP:', error);
-      return { success: false, error: error.message };
-    }
+    return await this.sendEmail(
+      user.email,
+      'Verify Your Email - OTP Code',
+      this.getEmailOtpTemplate(user, otp)
+    );
   }
 
   // Send password reset OTP
   async sendPasswordResetOtp(user, otp) {
-    if (!this.resend) {
-      logger.warn('Email service not available - skipping password reset OTP');
-      return { success: false, message: 'Email service not configured' };
-    }
-
-    try {
-      const result = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: user.email,
-        subject: 'Password Reset OTP Code',
-        html: this.getPasswordResetOtpTemplate(user, otp)
-      });
-
-      logger.info('Password reset OTP sent successfully:', { userId: user._id, email: user.email, id: result.id });
-      
-      return { success: true, id: result.id };
-    } catch (error) {
-      logger.error('Failed to send password reset OTP:', error);
-      return { success: false, error: error.message };
-    }
+    return await this.sendEmail(
+      user.email,
+      'Password Reset OTP Code',
+      this.getPasswordResetOtpTemplate(user, otp)
+    );
   }
 
   // Welcome email template

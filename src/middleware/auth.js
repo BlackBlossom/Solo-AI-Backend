@@ -26,12 +26,26 @@ const protect = async (req, res, next) => {
       return sendUnauthorized(res, 'The user belonging to this token does no longer exist.');
     }
 
-    // 4) Check if user is not locked
+    // 4) Check if ban has expired and auto-reactivate
+    await currentUser.checkBanExpiry();
+    
+    // 5) Check account status
+    if (currentUser.status === 'banned') {
+      const statusMessage = currentUser.getAccountStatusMessage();
+      return sendUnauthorized(res, statusMessage || 'Your account has been banned.');
+    }
+    
+    if (currentUser.status === 'suspended') {
+      const statusMessage = currentUser.getAccountStatusMessage();
+      return sendUnauthorized(res, statusMessage || 'Your account has been suspended.');
+    }
+
+    // 6) Check if user is not locked (too many failed attempts)
     if (currentUser.isLocked) {
       return sendUnauthorized(res, 'Your account is temporarily locked due to too many failed login attempts.');
     }
 
-    // 5) Check if user changed password after the token was issued
+    // 7) Check if user changed password after the token was issued
     if (currentUser.changedPasswordAfter(decoded.iat)) {
       return sendUnauthorized(res, 'User recently changed password! Please log in again.');
     }
@@ -62,8 +76,14 @@ const optionalAuth = async (req, res, next) => {
       const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
       const currentUser = await User.findById(decoded.id);
       
-      if (currentUser && !currentUser.isLocked && !currentUser.changedPasswordAfter(decoded.iat)) {
-        req.user = currentUser;
+      if (currentUser) {
+        // Check ban expiry
+        await currentUser.checkBanExpiry();
+        
+        // Only attach user if account is active and not locked
+        if (currentUser.status === 'active' && !currentUser.isLocked && !currentUser.changedPasswordAfter(decoded.iat)) {
+          req.user = currentUser;
+        }
       }
     }
 

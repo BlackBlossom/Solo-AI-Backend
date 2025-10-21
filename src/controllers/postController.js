@@ -35,7 +35,7 @@ const getUserPosts = async (req, res, next) => {
     }
 
     const posts = await Post.find(filter)
-      .populate('video', 'title thumbnailPath duration')
+      .populate('video', 'title thumbnailPath thumbnailUrl duration')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -83,7 +83,7 @@ const getPosts = async (req, res, next) => {
     }
 
     const posts = await Post.find(filter)
-      .populate('video', 'title thumbnailPath duration')
+      .populate('video', 'title thumbnailPath thumbnailUrl duration')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -104,7 +104,7 @@ const getPost = async (req, res, next) => {
     const post = await Post.findOne({
       _id: req.params.id,
       user: req.user.id
-    }).populate('video', 'title description thumbnailPath duration fileSize');
+    }).populate('video', 'title description thumbnailPath thumbnailUrl duration fileSize');
 
     if (!post) {
       return sendNotFound(res, 'Post not found');
@@ -383,7 +383,7 @@ const getPostAnalytics = async (req, res, next) => {
     const post = await Post.findOne({
       _id: req.params.id,
       user: req.user.id
-    }).populate('video', 'title');
+    }).populate('video', 'title thumbnailUrl');
 
     if (!post) {
       return sendNotFound(res, 'Post not found');

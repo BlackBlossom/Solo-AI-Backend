@@ -53,6 +53,7 @@ const createImmediatePost = async (req, res, next) => {
     const post = await Post.create({
       user: req.user.id,
       video: videoId,
+      thumbnailUrl: video.thumbnailUrl, // Cache video thumbnail for quick access
       caption,
       hashtags: hashtags || [],
       platforms: platforms.map(p => ({
@@ -278,6 +279,7 @@ const createScheduledPost = async (req, res, next) => {
     const post = await Post.create({
       user: req.user.id,
       video: videoId,
+      thumbnailUrl: video.thumbnailUrl, // Cache video thumbnail for quick access
       caption,
       hashtags: hashtags || [],
       platforms: platforms.map(p => ({

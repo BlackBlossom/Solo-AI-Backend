@@ -49,3 +49,9 @@ temp/
 *.md
 test-email.js
 test-otp-emails.js
+fix-all-secrets.js
+fix-resend-api-key.js
+fix-settings-id.js
+migrate-user-posts-videos.js
+migrate-user-status.js
+test-disclosure-levels.js
