@@ -138,4 +138,52 @@ videoSchema.pre('save', function(next) {
   next();
 });
 
+// Middleware to update User's videos array when a video is created
+videoSchema.post('save', async function(doc, next) {
+  try {
+    // Only update if this is a new video (not an update)
+    if (this.isNew) {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $addToSet: { videos: doc._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+    }
+    next();
+  } catch (error) {
+    console.error('Error updating user videos array:', error);
+    next(error);
+  }
+});
+
+// Middleware to remove video from User's videos array when deleted
+videoSchema.post('findOneAndDelete', async function(doc) {
+  if (doc) {
+    try {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $pull: { videos: doc._id } }
+      );
+    } catch (error) {
+      console.error('Error removing video from user videos array:', error);
+    }
+  }
+});
+
+videoSchema.post('deleteOne', async function(doc) {
+  if (doc) {
+    try {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $pull: { videos: doc._id } }
+      );
+    } catch (error) {
+      console.error('Error removing video from user videos array:', error);
+    }
+  }
+});
+
 module.exports = mongoose.model('Video', videoSchema);

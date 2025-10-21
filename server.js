@@ -11,6 +11,9 @@ process.on('uncaughtException', (err) => {
 // Load environment variables
 dotenv.config();
 
+// Track server start time for uptime calculation
+global.serverStartTime = Date.now();
+
 // Import app
 const app = require('./src/app');
 
@@ -19,9 +22,36 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.DATABASE_URI);
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    
+    // Initialize services after database connection
+    await initializeServices();
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
     process.exit(1);
+  }
+};
+
+// Initialize application services
+const initializeServices = async () => {
+  try {
+    console.log('📧 Initializing services...');
+    
+    // Initialize email service
+    const emailService = require('./src/services/emailService');
+    await emailService.initialize();
+    
+    // Initialize Cloudinary
+    const { initializeCloudinary } = require('./src/services/cloudinaryService');
+    await initializeCloudinary();
+    
+    // Initialize Bundle.social config
+    const { updateConfigFromDatabase } = require('./src/config/bundleSocial');
+    await updateConfigFromDatabase();
+    
+    console.log('✅ All services initialized successfully');
+  } catch (error) {
+    console.error('⚠️  Service initialization failed:', error.message);
+    console.log('Services will fall back to environment variables');
   }
 };
 

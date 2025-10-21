@@ -12,6 +12,11 @@ const postSchema = new mongoose.Schema({
     required: true
   },
   
+  // Video thumbnail (cached from video for quick access)
+  thumbnailUrl: {
+    type: String
+  },
+  
   // Post content
   caption: {
     type: String,
@@ -118,5 +123,53 @@ postSchema.index({ user: 1, createdAt: -1 });
 postSchema.index({ bundlePostId: 1 });
 postSchema.index({ scheduledFor: 1 });
 postSchema.index({ 'platforms.name': 1, 'platforms.status': 1 });
+
+// Middleware to update User's posts array when a post is created
+postSchema.post('save', async function(doc, next) {
+  try {
+    // Only update if this is a new post (not an update)
+    if (this.isNew) {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $addToSet: { posts: doc._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+    }
+    next();
+  } catch (error) {
+    console.error('Error updating user posts array:', error);
+    next(error);
+  }
+});
+
+// Middleware to remove post from User's posts array when deleted
+postSchema.post('findOneAndDelete', async function(doc) {
+  if (doc) {
+    try {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $pull: { posts: doc._id } }
+      );
+    } catch (error) {
+      console.error('Error removing post from user posts array:', error);
+    }
+  }
+});
+
+postSchema.post('deleteOne', async function(doc) {
+  if (doc) {
+    try {
+      const User = mongoose.model('User');
+      await User.findByIdAndUpdate(
+        doc.user,
+        { $pull: { posts: doc._id } }
+      );
+    } catch (error) {
+      console.error('Error removing post from user posts array:', error);
+    }
+  }
+});
 
 module.exports = mongoose.model('Post', postSchema);

@@ -62,6 +62,19 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   
+  // Account status
+  status: {
+    type: String,
+    enum: ['active', 'banned', 'suspended'],
+    default: 'active'
+  },
+  banReason: {
+    type: String
+  },
+  banExpiry: {
+    type: Date
+  },
+  
   // Email verification
   emailVerified: {
     type: Boolean,
@@ -156,6 +169,24 @@ userSchema.virtual('isLocked').get(function() {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
+// Virtual for account banned
+userSchema.virtual('isBanned').get(function() {
+  // Check if status is banned and not expired
+  if (this.status === 'banned') {
+    if (!this.banExpiry || this.banExpiry > Date.now()) {
+      return true;
+    }
+    // Ban has expired, will be handled by pre-login check
+    return false;
+  }
+  return false;
+});
+
+// Virtual for account suspended
+userSchema.virtual('isSuspended').get(function() {
+  return this.status === 'suspended';
+});
+
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password') || !this.password) return next();
@@ -213,6 +244,42 @@ userSchema.methods.resetLoginAttempts = function() {
   return this.updateOne({
     $unset: { loginAttempts: 1, lockUntil: 1 }
   });
+};
+
+// Method to check and clear expired ban
+userSchema.methods.checkBanExpiry = async function() {
+  if (this.status === 'banned' && this.banExpiry && this.banExpiry < Date.now()) {
+    // Ban has expired, reactivate account
+    this.status = 'active';
+    this.banReason = undefined;
+    this.banExpiry = undefined;
+    await this.save({ validateBeforeSave: false });
+    return { expired: true, message: 'Your ban has expired. Account has been reactivated.' };
+  }
+  return { expired: false };
+};
+
+// Method to get ban/suspension details
+userSchema.methods.getAccountStatusMessage = function() {
+  if (this.status === 'banned') {
+    const message = this.banReason 
+      ? `Your account has been banned. Reason: ${this.banReason}`
+      : 'Your account has been banned.';
+    
+    if (this.banExpiry) {
+      const expiryDate = new Date(this.banExpiry).toLocaleDateString();
+      return `${message} This ban will expire on ${expiryDate}.`;
+    }
+    return `${message} This is a permanent ban.`;
+  }
+  
+  if (this.status === 'suspended') {
+    return this.banReason 
+      ? `Your account has been suspended. Reason: ${this.banReason}`
+      : 'Your account has been suspended. Please contact support.';
+  }
+  
+  return null;
 };
 
 module.exports = mongoose.model('User', userSchema);

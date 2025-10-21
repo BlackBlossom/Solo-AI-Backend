@@ -20,6 +20,7 @@ const socialRoutes = require('./routes/social');
 const postRoutes = require('./routes/posts');
 const aiRoutes = require('./routes/ai');
 const analyticsRoutes = require('./routes/analytics');
+const adminRoutes = require('./routes/admin');
 
 // Create Express app
 const app = express();
@@ -230,6 +231,7 @@ app.use('/api/v1/social', socialRoutes);
 app.use('/api/v1/posts', postRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

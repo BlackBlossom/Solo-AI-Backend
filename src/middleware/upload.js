@@ -82,11 +82,70 @@ const uploadVideoMemory = multer({
   }
 });
 
+// File filter for admin media (images, audio, gifs, fonts)
+const mediaFileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    // Images
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    // Audio
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/ogg',
+    'audio/m4a',
+    'audio/x-m4a',
+    // Video (will be converted to GIF)
+    'video/mp4',
+    'video/quicktime', // .mov
+    'video/x-msvideo', // .avi
+    'video/webm',
+    'video/x-matroska', // .mkv
+    // Fonts
+    'font/ttf',
+    'font/otf',
+    'font/woff',
+    'font/woff2',
+    'application/x-font-ttf',
+    'application/x-font-otf',
+    'application/font-woff',
+    'application/font-woff2',
+    'application/x-font-truetype',
+    'application/x-font-opentype',
+    'application/octet-stream' // Some fonts come as this
+  ];
+  
+  // Check if it's a font file by extension
+  const fontExtensions = ['.ttf', '.otf', '.woff', '.woff2'];
+  const isFontByExtension = fontExtensions.some(ext => 
+    file.originalname.toLowerCase().endsWith(ext)
+  );
+  
+  if (allowedTypes.includes(file.mimetype) || isFontByExtension) {
+    cb(null, true);
+  } else {
+    cb(new AppError(`Invalid file type: ${file.mimetype}. Only images (JPEG, PNG, GIF, WebP, SVG), audio files (MP3, WAV, OGG, M4A), videos (MP4, MOV, AVI, WebM, MKV), and fonts (TTF, OTF, WOFF, WOFF2) are allowed.`, 400), false);
+  }
+};
+
+// Media upload configuration for Cloudinary (memory storage)
+const uploadMedia = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: mediaFileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit (videos can be larger)
+  }
+});
+
 // Handle multer errors
 const handleMulterError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return next(new AppError('File too large. Maximum size is 100MB for videos and 10MB for images.', 400));
+      return next(new AppError('File too large. Maximum size is 100MB for videos, 50MB for media uploads, and 10MB for images.', 400));
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return next(new AppError('Too many files. Maximum 1 file allowed.', 400));
@@ -103,5 +162,6 @@ module.exports = {
   uploadImage,
   uploadMemory,
   uploadVideoMemory,
+  uploadMedia,
   handleMulterError
 };

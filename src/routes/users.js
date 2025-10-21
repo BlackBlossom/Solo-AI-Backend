@@ -1,7 +1,7 @@
 const express = require('express');
 const userController = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
-const { uploadImage, handleMulterError } = require('../middleware/upload');
+const { uploadMedia, handleMulterError } = require('../middleware/upload');
 const { validate, validateImageUpload } = require('../middleware/validation');
 const { updateProfileSchema, deleteAccountSchema } = require('../utils/validation');
 
@@ -136,7 +136,13 @@ router.patch('/preferences', userController.updatePreferences);
  * @swagger
  * /api/v1/users/profile-picture:
  *   post:
- *     summary: Upload profile picture
+ *     summary: Upload profile picture to Cloudinary
+ *     description: |
+ *       Upload a profile picture directly to Cloudinary cloud storage.
+ *       - Supports JPEG, PNG, GIF, WebP, and SVG formats
+ *       - Maximum file size: 50MB
+ *       - Automatically deletes old profile picture from Cloudinary if it exists
+ *       - Returns Cloudinary URL and metadata
  *     tags: [Users]
  *     requestBody:
  *       required: true
@@ -144,14 +150,16 @@ router.patch('/preferences', userController.updatePreferences);
  *         multipart/form-data:
  *           schema:
  *             type: object
+ *             required:
+ *               - image
  *             properties:
  *               image:
  *                 type: string
  *                 format: binary
- *                 description: Profile picture image file
+ *                 description: Profile picture image file (JPEG, PNG, GIF, WebP, SVG, max 50MB)
  *     responses:
  *       200:
- *         description: Profile picture uploaded successfully
+ *         description: Profile picture uploaded successfully to Cloudinary
  *         content:
  *           application/json:
  *             schema:
@@ -160,24 +168,70 @@ router.patch('/preferences', userController.updatePreferences);
  *                 success:
  *                   type: boolean
  *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile picture uploaded successfully
  *                 data:
  *                   type: object
  *                   properties:
  *                     profilePicture:
  *                       type: string
- *                       description: URL of uploaded profile picture
+ *                       description: Cloudinary URL of uploaded profile picture
+ *                       example: https://res.cloudinary.com/your-cloud/image/upload/v1234567890/solo-ai/profiles/profile-123_456789.jpg
+ *                     cloudinary:
+ *                       type: object
+ *                       description: Additional Cloudinary metadata
+ *                       properties:
+ *                         publicId:
+ *                           type: string
+ *                           description: Cloudinary public ID for the image
+ *                           example: solo-ai/profiles/profile-123_456789
+ *                         format:
+ *                           type: string
+ *                           description: Image format
+ *                           example: jpg
+ *                         width:
+ *                           type: number
+ *                           description: Image width in pixels
+ *                           example: 1024
+ *                         height:
+ *                           type: number
+ *                           description: Image height in pixels
+ *                           example: 1024
  *       400:
- *         description: Invalid file or file too large
+ *         description: Invalid file, file too large, or upload failed
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               no_file:
+ *                 summary: No file provided
+ *                 value:
+ *                   success: false
+ *                   message: Please upload a profile picture
+ *               file_too_large:
+ *                 summary: File size exceeds limit
+ *                 value:
+ *                   success: false
+ *                   message: File too large. Maximum size is 50MB for media uploads
+ *               invalid_type:
+ *                 summary: Invalid file type
+ *                 value:
+ *                   success: false
+ *                   message: Invalid file type. Only images (JPEG, PNG, GIF, WebP, SVG) are allowed
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/profile-picture',
-  uploadImage.single('image'),
+  uploadMedia.single('image'),
   handleMulterError,
   validateImageUpload,
   userController.uploadProfilePicture
