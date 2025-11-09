@@ -97,8 +97,12 @@ const createImmediatePost = async (req, res, next) => {
             };
             break;
           case 'YOUTUBE':
+            // Use user-specified type from platform settings, or default based on duration
+            const youtubePlatform = platforms.find(p => p.name.toUpperCase() === 'YOUTUBE');
+            const youtubeType = youtubePlatform?.type || (video.duration <= 60 ? 'SHORT' : 'VIDEO');
+            
             platformData[platformName] = {
-              type: video.duration <= 60 ? 'SHORT' : 'VIDEO',
+              type: youtubeType.toUpperCase(),
               uploadIds: [video.bundleUploadId],
               text: video.title || caption.substring(0, 100),
               description: caption,
@@ -324,8 +328,12 @@ const createScheduledPost = async (req, res, next) => {
             };
             break;
           case 'YOUTUBE':
+            // Use user-specified type from platform settings, or default based on duration
+            const youtubePlatformScheduled = platforms.find(p => p.name.toUpperCase() === 'YOUTUBE');
+            const youtubeTypeScheduled = youtubePlatformScheduled?.type || (video.duration <= 60 ? 'SHORT' : 'VIDEO');
+            
             platformData[platformName] = {
-              type: video.duration <= 60 ? 'SHORT' : 'VIDEO',
+              type: youtubeTypeScheduled.toUpperCase(),
               uploadIds: [video.bundleUploadId],
               text: video.title || caption.substring(0, 100),
               description: caption,

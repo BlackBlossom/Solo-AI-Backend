@@ -277,6 +277,25 @@ const resetPasswordSchema = Joi.object({
   })
 });
 
+// Inspiration validation schemas
+const inspirationSearchSchema = Joi.object({
+  topic: Joi.string().trim().min(2).max(100).required().messages({
+    'string.empty': 'Topic is required',
+    'string.min': 'Topic must be at least 2 characters',
+    'string.max': 'Topic cannot exceed 100 characters',
+    'any.required': 'Topic is required'
+  }),
+  region: Joi.string().uppercase().length(2).default('US').messages({
+    'string.length': 'Region code must be 2 characters (e.g., US, GB, IN)'
+  }),
+  limit: Joi.number().integer().min(1).max(25).default(10)
+});
+
+const subredditSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(25).default(10),
+  sort: Joi.string().valid('hot', 'new', 'top').default('hot')
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
@@ -294,5 +313,7 @@ module.exports = {
   verifyEmailOtpSchema,
   sendPasswordResetOtpSchema,
   verifyPasswordResetOtpSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  inspirationSearchSchema,
+  subredditSchema
 };

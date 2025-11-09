@@ -168,9 +168,17 @@ router.use(protect);
  *                     accountId:
  *                       type: string
  *                       description: Platform account ID from Bundle.social
+ *                     type:
+ *                       type: string
+ *                       enum: [SHORT, VIDEO]
+ *                       description: "YouTube-specific: Video type (SHORT for vertical videos ≤60s, VIDEO for regular uploads). Only used when name is 'youtube'. Optional - defaults to SHORT for videos ≤60s, VIDEO otherwise"
+ *                       example: SHORT
  *                 example:
  *                   - name: instagram
  *                     accountId: bundle_account_123
+ *                   - name: youtube
+ *                     accountId: bundle_account_789
+ *                     type: SHORT
  *                   - name: twitter
  *                     accountId: bundle_account_456
  *               settings:
@@ -262,9 +270,17 @@ router.post('/create', ensureBundleSetup, validate(postCreateSchema), newPostCon
  *                     accountId:
  *                       type: string
  *                       description: Platform account ID from Bundle.social
+ *                     type:
+ *                       type: string
+ *                       enum: [SHORT, VIDEO]
+ *                       description: "YouTube-specific: Video type (SHORT for vertical videos ≤60s, VIDEO for regular uploads). Only used when name is 'youtube'. Optional - defaults to SHORT for videos ≤60s, VIDEO otherwise"
+ *                       example: VIDEO
  *                 example:
  *                   - name: instagram
  *                     accountId: bundle_account_123
+ *                   - name: youtube
+ *                     accountId: bundle_account_789
+ *                     type: VIDEO
  *                   - name: twitter
  *                     accountId: bundle_account_456
  *               scheduledFor:
