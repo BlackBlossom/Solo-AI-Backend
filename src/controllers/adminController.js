@@ -1775,6 +1775,59 @@ const restrictAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * Update contact emails (support and report problem emails)
+ */
+const updateContactEmails = async (req, res, next) => {
+  try {
+    const { supportEmail, reportProblemEmail } = req.body;
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (supportEmail && !emailRegex.test(supportEmail)) {
+      return sendBadRequest(res, 'Invalid support email format');
+    }
+    
+    if (reportProblemEmail && !emailRegex.test(reportProblemEmail)) {
+      return sendBadRequest(res, 'Invalid report problem email format');
+    }
+
+    // Get current settings
+    const settings = await Settings.getSettings();
+
+    // Update only the provided emails
+    if (supportEmail !== undefined) {
+      settings.app.supportEmail = supportEmail;
+    }
+    
+    if (reportProblemEmail !== undefined) {
+      settings.app.reportProblemEmail = reportProblemEmail;
+    }
+
+    settings.lastUpdatedBy = req.admin._id;
+    settings.lastUpdatedAt = new Date();
+    
+    await settings.save();
+
+    logger.info('Contact emails updated', {
+      adminId: req.admin._id,
+      supportEmail: supportEmail || 'not changed',
+      reportProblemEmail: reportProblemEmail || 'not changed'
+    });
+
+    return sendSuccess(res, 'Contact emails updated successfully', {
+      contactEmails: {
+        supportEmail: settings.app.supportEmail,
+        reportProblemEmail: settings.app.reportProblemEmail
+      }
+    });
+  } catch (error) {
+    logger.error('Update contact emails error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   // Auth
   login,
@@ -1806,6 +1859,7 @@ module.exports = {
   // Settings
   getSettings,
   updateSettings,
+  updateContactEmails,
   // Activity Logs
   getActivityLogs,
   // Admin Management (Superadmin only)

@@ -21,6 +21,8 @@ const postRoutes = require('./routes/posts');
 const aiRoutes = require('./routes/ai');
 const analyticsRoutes = require('./routes/analytics');
 const adminRoutes = require('./routes/admin');
+const legalRoutes = require('./routes/legal');
+const configRoutes = require('./routes/config');
 
 // Create Express app
 const app = express();
@@ -232,6 +234,8 @@ app.use('/api/v1/posts', postRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/legal', legalRoutes);
+app.use('/api/v1/config', configRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

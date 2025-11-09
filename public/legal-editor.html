@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Legal Content Editor - SoloAI Admin</title>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: rgba(26, 26, 46, 0.95);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h1 {
+      color: #bb86fc;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      color: #bb86fc;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(187, 134, 252, 0.3);
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 14px;
+    }
+
+    select:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: #bb86fc;
+    }
+
+    .editor-container {
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    #editor {
+      height: 400px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #bb86fc;
+      color: #1a1a2e;
+    }
+
+    .btn-primary:hover {
+      background: #a86dea;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: rgba(187, 134, 252, 0.2);
+      color: #bb86fc;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(187, 134, 252, 0.3);
+    }
+
+    .btn-danger {
+      background: #cf6679;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #b85566;
+    }
+
+    .status {
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .status.success {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+      border: 1px solid #4caf50;
+    }
+
+    .status.error {
+      background: rgba(207, 102, 121, 0.2);
+      color: #cf6679;
+      border: 1px solid #cf6679;
+    }
+
+    .info {
+      background: rgba(3, 218, 198, 0.1);
+      padding: 15px;
+      border-radius: 6px;
+      border-left: 4px solid #03dac6;
+      margin-bottom: 20px;
+      color: #03dac6;
+    }
+
+    .version-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: rgba(187, 134, 252, 0.1);
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .preview-btn {
+      background: #03dac6;
+      color: #1a1a2e;
+    }
+
+    .preview-btn:hover {
+      background: #00c4b4;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📄 Legal Content Editor</h1>
+
+    <div class="info">
+      <strong>Instructions:</strong> Select a content type, edit the HTML content using the rich text editor, 
+      and click "Save Changes". The version will be automatically incremented.
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="form-group">
+      <label for="token">Admin Token</label>
+      <input type="text" id="token" placeholder="Paste your admin token here" />
+    </div>
+
+    <div class="form-group">
+      <label for="contentType">Content Type</label>
+      <select id="contentType">
+        <option value="">Select content type...</option>
+        <option value="privacy_policy">Privacy Policy</option>
+        <option value="terms_of_use">Terms of Use</option>
+        <option value="faq">FAQ</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input type="text" id="title" placeholder="Enter title" />
+    </div>
+
+    <div class="version-info" id="versionInfo" style="display: none;">
+      <span>Current Version: <strong id="currentVersion">-</strong></span>
+      <span>Last Updated: <strong id="lastUpdated">-</strong></span>
+      <span>Updated By: <strong id="updatedBy">-</strong></span>
+    </div>
+
+    <div class="form-group checkbox-group">
+      <input type="checkbox" id="isPublished" checked />
+      <label for="isPublished" style="margin-bottom: 0;">Publish content (visible to public)</label>
+    </div>
+
+    <div class="form-group">
+      <label>HTML Content</label>
+      <div class="editor-container">
+        <div id="editor"></div>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button class="btn-secondary" onclick="loadContent()">Load Current Content</button>
+      <button class="preview-btn" onclick="previewContent()">Preview</button>
+      <button class="btn-primary" onclick="saveContent()">Save Changes</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script>
+    // Initialize Quill editor
+    const quill = new Quill('#editor', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'header': [2, 3, false] }],
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          ['link'],
+          ['blockquote', 'code-block'],
+          ['clean']
+        ]
+      }
+    });
+
+    // API base URL
+    const API_BASE = window.location.hostname === 'localhost' 
+      ? 'http://localhost:5000/api/v1'
+      : 'https://api.soloai.app/api/v1';
+
+    // Show status message
+    function showStatus(message, isError = false) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = `status ${isError ? 'error' : 'success'}`;
+      statusEl.style.display = 'block';
+      
+      setTimeout(() => {
+        statusEl.style.display = 'none';
+      }, 5000);
+    }
+
+    // Get headers with token
+    function getHeaders() {
+      const token = document.getElementById('token').value.trim();
+      if (!token) {
+        throw new Error('Please enter admin token');
+      }
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+    }
+
+    // Load content from API
+    async function loadContent() {
+      try {
+        const contentType = document.getElementById('contentType').value;
+        if (!contentType) {
+          showStatus('Please select a content type', true);
+          return;
+        }
+
+        const headers = getHeaders();
+        const response = await fetch(`${API_BASE}/admin/legal/${contentType}`, {
+          headers: headers
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const content = data.data.content;
+
+        // Populate form
+        document.getElementById('title').value = content.title;
+        document.getElementById('isPublished').checked = content.isPublished;
+        quill.root.innerHTML = content.htmlContent;
+
+        // Show version info
+        const versionInfo = document.getElementById('versionInfo');
+        versionInfo.style.display = 'flex';
+        document.getElementById('currentVersion').textContent = content.version;
+        document.getElementById('lastUpdated').textContent = new Date(content.updatedAt).toLocaleString();
+        document.getElementById('updatedBy').textContent = content.lastUpdatedBy?.name || 'Unknown';
+
+        showStatus('Content loaded successfully');
+      } catch (error) {
+        showStatus(error.message, true);
+        console.error('Load error:', error);
+      }
+    }
+
+    // Save content
+    async function saveContent() {
+      try {
+        const contentType = document.getElementById('contentType').value;
+        const title = document.getElementById('title').value.trim();
+        const htmlContent = quill.root.innerHTML;
+        const isPublished = document.getElementById('isPublished').checked;
+
+        if (!contentType) {
+          showStatus('Please select a content type', true);
+          return;
+        }
+
+        if (!title) {
+          showStatus('Please enter a title', true);
+          return;
+        }
+
+        const headers = getHeaders();
+        
+        // Strip HTML tags for plain text version
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+        const plainText = tempDiv.textContent || tempDiv.innerText || '';
+
+        const response = await fetch(`${API_BASE}/admin/legal`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            type: contentType,
+            title: title,
+            content: plainText,
+            htmlContent: htmlContent,
+            isPublished: isPublished
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        showStatus(data.message || 'Content saved successfully');
+        
+        // Reload to show updated version
+        setTimeout(loadContent, 1000);
+      } catch (error) {
+        showStatus(error.message, true);
+        console.error('Save error:', error);
+      }
+    }
+
+    // Preview content
+    function previewContent() {
+      const contentType = document.getElementById('contentType').value;
+      if (!contentType) {
+        showStatus('Please select a content type', true);
+        return;
+      }
+
+      const previewUrl = `${API_BASE.replace('/api/v1', '')}/api/v1/legal/${contentType}/view`;
+      window.open(previewUrl, '_blank');
+    }
+
+    // Auto-load when content type changes
+    document.getElementById('contentType').addEventListener('change', function() {
+      if (this.value && document.getElementById('token').value.trim()) {
+        loadContent();
+      }
+    });
+
+    // Sample HTML templates
+    const templates = {
+      privacy_policy: `<h2>1. Introduction</h2>
+<p>Welcome to SoloAI! We value your trust and are committed to protecting your privacy.</p>
+
+<h2>2. Information We Collect</h2>
+<ul>
+  <li>Personal details such as name, email, and phone number.</li>
+  <li>Social media data when you connect your accounts.</li>
+</ul>`,
+      
+      terms_of_use: `<h2>1. Acceptance of Terms</h2>
+<p>By accessing or using SoloAI, you agree to be bound by these Terms of Use.</p>
+
+<h2>2. User Responsibilities</h2>
+<ul>
+  <li>You must provide accurate information during registration.</li>
+  <li>Do not use SoloAI for illegal or harmful purposes.</li>
+</ul>`,
+      
+      faq: `<h2>What is SoloAI?</h2>
+<p>SoloAI is your personal social-media companion that connects and analyzes your content performance using AI.</p>
+
+<h2>Is my data safe?</h2>
+<p>Absolutely. We store data securely and never share personal information with third parties without consent.</p>`
+    };
+  </script>
+</body>
+</html>
