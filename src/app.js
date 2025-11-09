@@ -23,6 +23,7 @@ const analyticsRoutes = require('./routes/analytics');
 const adminRoutes = require('./routes/admin');
 const legalRoutes = require('./routes/legal');
 const configRoutes = require('./routes/config');
+const inspirationRoutes = require('./routes/inspiration');
 
 // Create Express app
 const app = express();
@@ -236,6 +237,7 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/legal', legalRoutes);
 app.use('/api/v1/config', configRoutes);
+app.use('/api/v1/inspiration', inspirationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
