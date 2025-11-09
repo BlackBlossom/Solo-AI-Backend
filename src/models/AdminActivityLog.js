@@ -16,7 +16,7 @@ const adminActivityLogSchema = new mongoose.Schema({
   },
   resourceType: {
     type: String,
-    enum: ['user', 'video', 'post', 'media', 'social_account', 'settings', 'admin'],
+    enum: ['user', 'video', 'post', 'media', 'social_account', 'settings', 'admin', 'legal_content'],
     required: true
   },
   resourceId: String,

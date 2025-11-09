@@ -10,7 +10,8 @@ class GeminiService {
     }
 
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    // Use gemini-2.0-flash-exp (latest) or fallback to gemini-1.5-flash
+    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
   }
 
   async generateCaption(video, options = {}) {

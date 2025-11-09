@@ -153,7 +153,23 @@ const settingsSchema = new mongoose.Schema({
     },
     supportEmail: {
       type: String,
-      default: 'support@soloai.com'
+      default: 'support@soloai.app',
+      validate: {
+        validator: function(v) {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: 'Invalid email format for support email'
+      }
+    },
+    reportProblemEmail: {
+      type: String,
+      default: 'support@soloai.app',
+      validate: {
+        validator: function(v) {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: 'Invalid email format for report problem email'
+      }
     },
     maintenanceMode: {
       type: Boolean,

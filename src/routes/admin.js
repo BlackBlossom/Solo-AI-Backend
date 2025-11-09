@@ -1,5 +1,6 @@
 const express = require('express');
 const adminController = require('../controllers/adminController');
+const legalController = require('../controllers/legalController');
 const { protectAdmin, restrictTo, checkPermission, logActivity } = require('../middleware/adminAuth');
 const { uploadMedia, handleMulterError } = require('../middleware/upload');
 
@@ -28,6 +29,8 @@ const router = express.Router();
  *     description: System settings and configuration
  *   - name: Admin Activity
  *     description: Activity logs and audit trails
+ *   - name: Admin Legal
+ *     description: Legal content management (Privacy Policy, Terms of Use, FAQ)
  */
 
 /**
@@ -1472,6 +1475,92 @@ router.patch(
   adminController.updateSettings
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/settings/contact-emails:
+ *   patch:
+ *     summary: Update contact emails (support and report problem emails)
+ *     description: |
+ *       Update the support email and/or report problem email addresses that will be displayed in the app.
+ *       These emails are used for:
+ *       - Support inquiries from users
+ *       - Problem/bug reports
+ *       
+ *       Admin or Superadmin can update these settings.
+ *     tags: [Admin Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               supportEmail:
+ *                 type: string
+ *                 format: email
+ *                 example: support@soloai.app
+ *                 description: Email address for general support inquiries
+ *               reportProblemEmail:
+ *                 type: string
+ *                 format: email
+ *                 example: bugs@soloai.app
+ *                 description: Email address for problem/bug reports
+ *           examples:
+ *             updateBoth:
+ *               summary: Update both emails
+ *               value:
+ *                 supportEmail: support@soloai.app
+ *                 reportProblemEmail: bugs@soloai.app
+ *             updateSupportOnly:
+ *               summary: Update support email only
+ *               value:
+ *                 supportEmail: help@soloai.app
+ *             updateReportOnly:
+ *               summary: Update report email only
+ *               value:
+ *                 reportProblemEmail: issues@soloai.app
+ *     responses:
+ *       200:
+ *         description: Contact emails updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Contact emails updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     contactEmails:
+ *                       type: object
+ *                       properties:
+ *                         supportEmail:
+ *                           type: string
+ *                           example: support@soloai.app
+ *                         reportProblemEmail:
+ *                           type: string
+ *                           example: bugs@soloai.app
+ *       400:
+ *         description: Invalid email format
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *       403:
+ *         description: Forbidden - Admin or Superadmin only
+ */
+router.patch(
+  '/settings/contact-emails',
+  restrictTo('superadmin', 'admin'),
+  logActivity('settings_update', 'settings'),
+  adminController.updateContactEmails
+);
+
 // ==================== ACTIVITY LOGS ====================
 
 /**
@@ -1864,6 +1953,294 @@ router.delete(
   restrictTo('superadmin'),
   logActivity('delete', 'admin'),
   adminController.deleteAdmin
+);
+
+// ==================== LEGAL CONTENT ROUTES ====================
+
+/**
+ * @swagger
+ * /api/v1/admin/legal:
+ *   get:
+ *     summary: Get all legal content
+ *     description: Retrieve all legal content (Privacy Policy, Terms of Use, FAQ) with admin details
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Legal content retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     contents:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                             enum: [privacy_policy, terms_of_use, faq]
+ *                           title:
+ *                             type: string
+ *                           content:
+ *                             type: string
+ *                           htmlContent:
+ *                             type: string
+ *                           lastUpdatedBy:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                           version:
+ *                             type: number
+ *                           isPublished:
+ *                             type: boolean
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ */
+router.get(
+  '/legal',
+  protectAdmin,
+  checkPermission('settings'),
+  legalController.getAllLegalContent
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/legal/{type}:
+ *   get:
+ *     summary: Get legal content by type
+ *     description: Retrieve specific legal content with full details including admin information
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [privacy_policy, terms_of_use, faq]
+ *         description: Type of legal content
+ *     responses:
+ *       200:
+ *         description: Legal content retrieved successfully
+ *       404:
+ *         description: Legal content not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/legal/:type',
+  protectAdmin,
+  checkPermission('settings'),
+  legalController.getAdminLegalContent
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/legal:
+ *   post:
+ *     summary: Create or update legal content
+ *     description: Create new legal content or update existing one. Automatically increments version on update.
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - type
+ *               - title
+ *               - content
+ *               - htmlContent
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [privacy_policy, terms_of_use, faq]
+ *                 description: Type of legal content
+ *               title:
+ *                 type: string
+ *                 example: Privacy Policy
+ *               content:
+ *                 type: string
+ *                 description: Plain text version of content
+ *               htmlContent:
+ *                 type: string
+ *                 description: HTML formatted content for web view
+ *               isPublished:
+ *                 type: boolean
+ *                 default: true
+ *           example:
+ *             type: privacy_policy
+ *             title: Privacy Policy
+ *             content: "Welcome to SoloAI! We value your trust and are committed to protecting your privacy..."
+ *             htmlContent: "<h2>1. Introduction</h2><p>Welcome to SoloAI! We value your trust...</p>"
+ *             isPublished: true
+ *     responses:
+ *       200:
+ *         description: Legal content updated successfully
+ *       201:
+ *         description: Legal content created successfully
+ *       400:
+ *         description: Missing required fields or invalid type
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/legal',
+  protectAdmin,
+  restrictTo('superadmin', 'admin'),
+  checkPermission('settings'),
+  logActivity('create', 'legal_content'),
+  legalController.createOrUpdateLegalContent
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/legal/{type}:
+ *   patch:
+ *     summary: Update legal content
+ *     description: Update existing legal content by type. Version is automatically incremented.
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [privacy_policy, terms_of_use, faq]
+ *         description: Type of legal content to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               htmlContent:
+ *                 type: string
+ *               isPublished:
+ *                 type: boolean
+ *           example:
+ *             title: Updated Privacy Policy
+ *             htmlContent: "<h2>1. Introduction</h2><p>Updated content...</p>"
+ *             isPublished: true
+ *     responses:
+ *       200:
+ *         description: Legal content updated successfully
+ *       404:
+ *         description: Legal content not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  '/legal/:type',
+  protectAdmin,
+  restrictTo('superadmin', 'admin'),
+  checkPermission('settings'),
+  logActivity('update', 'legal_content'),
+  legalController.updateLegalContent
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/legal/{type}/publish:
+ *   patch:
+ *     summary: Toggle publish status
+ *     description: Publish or unpublish legal content. Unpublished content won't be visible to public.
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [privacy_policy, terms_of_use, faq]
+ *         description: Type of legal content
+ *     responses:
+ *       200:
+ *         description: Publish status toggled successfully
+ *       404:
+ *         description: Legal content not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  '/legal/:type/publish',
+  protectAdmin,
+  restrictTo('superadmin', 'admin'),
+  checkPermission('settings'),
+  logActivity('status_change', 'legal_content'),
+  legalController.togglePublishStatus
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/legal/{type}:
+ *   delete:
+ *     summary: Delete legal content
+ *     description: Permanently delete legal content. Only superadmin can perform this action.
+ *     tags: [Admin Legal]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [privacy_policy, terms_of_use, faq]
+ *         description: Type of legal content to delete
+ *     responses:
+ *       204:
+ *         description: Legal content deleted successfully
+ *       404:
+ *         description: Legal content not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Superadmin only
+ */
+router.delete(
+  '/legal/:type',
+  protectAdmin,
+  restrictTo('superadmin'),
+  logActivity('delete', 'legal_content'),
+  legalController.deleteLegalContent
 );
 
 module.exports = router;
