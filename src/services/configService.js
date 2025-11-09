@@ -30,7 +30,7 @@ class ConfigService {
       // Fetch from database
       logger.debug('Fetching settings from database');
       const settings = await Settings.findById('app_settings')
-        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.geminiApiKey +apiKeys.bundleSocialApiKey');
+        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.geminiApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password');
 
       if (!settings) {
         logger.warn('No settings found in database, creating from environment variables');
@@ -103,6 +103,16 @@ class ConfigService {
         geminiApiKey: process.env.GEMINI_API_KEY || '',
         bundleSocialApiKey: process.env.BUNDLE_SOCIAL_API_KEY || '',
         bundleSocialOrgId: process.env.BUNDLE_SOCIAL_ORG_ID || ''
+      },
+      reddit: {
+        clientId: process.env.REDDIT_CLIENT_ID || '',
+        clientSecret: process.env.REDDIT_CLIENT_SECRET || '',
+        username: process.env.REDDIT_USERNAME || '',
+        password: process.env.REDDIT_PASSWORD || '',
+        userAgent: process.env.REDDIT_USER_AGENT || 'SoloAI/1.0.0'
+      },
+      inspiration: {
+        cacheTTL: parseInt(process.env.INSPIRATION_CACHE_TTL) || 86400
       },
       urls: {
         productionUrl: process.env.PRODUCTION_URL || '',
@@ -214,6 +224,22 @@ class ConfigService {
   async getFeatures() {
     const settings = await this.getSettings();
     return settings.features || this.getFallbackSettings().features;
+  }
+
+  /**
+   * Get Reddit API configuration
+   */
+  async getRedditConfig() {
+    const settings = await this.getSettings();
+    return settings.reddit || this.getFallbackSettings().reddit;
+  }
+
+  /**
+   * Get Inspiration API settings
+   */
+  async getInspirationConfig() {
+    const settings = await this.getSettings();
+    return settings.inspiration || this.getFallbackSettings().inspiration;
   }
 
   /**

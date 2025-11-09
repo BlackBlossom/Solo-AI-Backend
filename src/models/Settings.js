@@ -129,6 +129,41 @@ const settingsSchema = new mongoose.Schema({
     }
   },
 
+  // Reddit API Configuration
+  reddit: {
+    clientId: {
+      type: String,
+      select: false, // Don't return by default for security
+      default: process.env.REDDIT_CLIENT_ID || ''
+    },
+    clientSecret: {
+      type: String,
+      select: false, // Don't return by default for security
+      default: process.env.REDDIT_CLIENT_SECRET || ''
+    },
+    username: {
+      type: String,
+      default: process.env.REDDIT_USERNAME || ''
+    },
+    password: {
+      type: String,
+      select: false, // Don't return by default for security
+      default: process.env.REDDIT_PASSWORD || ''
+    },
+    userAgent: {
+      type: String,
+      default: process.env.REDDIT_USER_AGENT || 'SoloAI/1.0.0'
+    }
+  },
+
+  // Inspiration API Settings
+  inspiration: {
+    cacheTTL: {
+      type: Number, // in seconds
+      default: parseInt(process.env.INSPIRATION_CACHE_TTL) || 86400 // 24 hours
+    }
+  },
+
   // URL Settings
   urls: {
     productionUrl: {
@@ -237,6 +272,11 @@ settingsSchema.methods.toPublicJSON = function() {
     delete obj.apiKeys.geminiApiKey;
     delete obj.apiKeys.bundleSocialApiKey;
   }
+  if (obj.reddit) {
+    delete obj.reddit.clientId;
+    delete obj.reddit.clientSecret;
+    delete obj.reddit.password;
+  }
   
   return obj;
 };
@@ -269,6 +309,18 @@ settingsSchema.methods.toMaskedJSON = function() {
   if (this.apiKeys?.bundleSocialApiKey) {
     obj.apiKeys = obj.apiKeys || {};
     obj.apiKeys.bundleSocialApiKey = this.maskSecret(this.apiKeys.bundleSocialApiKey);
+  }
+  if (this.reddit?.clientId) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.clientId = this.maskSecret(this.reddit.clientId);
+  }
+  if (this.reddit?.clientSecret) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.clientSecret = this.maskSecret(this.reddit.clientSecret);
+  }
+  if (this.reddit?.password) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.password = this.maskSecret(this.reddit.password);
   }
   
   return obj;
@@ -316,6 +368,21 @@ settingsSchema.methods.toFullJSON = function() {
     obj.apiKeys.bundleSocialApiKey = this.apiKeys.bundleSocialApiKey;
   }
   
+  if (this.reddit?.clientId !== undefined) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.clientId = this.reddit.clientId;
+  }
+  
+  if (this.reddit?.clientSecret !== undefined) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.clientSecret = this.reddit.clientSecret;
+  }
+  
+  if (this.reddit?.password !== undefined) {
+    obj.reddit = obj.reddit || {};
+    obj.reddit.password = this.reddit.password;
+  }
+  
   // Return everything including sensitive fields
   // This should ONLY be used for superadmin requests with proper authentication
   return obj;
@@ -338,7 +405,10 @@ settingsSchema.statics.getSettings = async function() {
     .select('+email.resend.apiKey')
     .select('+email.smtp.pass')
     .select('+apiKeys.geminiApiKey')
-    .select('+apiKeys.bundleSocialApiKey');
+    .select('+apiKeys.bundleSocialApiKey')
+    .select('+reddit.clientId')
+    .select('+reddit.clientSecret')
+    .select('+reddit.password');
   
   if (!settings) {
     // Create default settings from environment variables
@@ -353,7 +423,10 @@ settingsSchema.statics.getSettings = async function() {
       .select('+email.resend.apiKey')
       .select('+email.smtp.pass')
       .select('+apiKeys.geminiApiKey')
-      .select('+apiKeys.bundleSocialApiKey');
+      .select('+apiKeys.bundleSocialApiKey')
+      .select('+reddit.clientId')
+      .select('+reddit.clientSecret')
+      .select('+reddit.password');
   }
   
   return settings;
@@ -411,6 +484,18 @@ settingsSchema.pre('save', function(next) {
 
   if (this.apiKeys?.bundleSocialApiKey && bulletRegex.test(this.apiKeys.bundleSocialApiKey)) {
     errors.push('Bundle.social API Key contains invalid bullet characters (•)');
+  }
+
+  if (this.reddit?.clientId && bulletRegex.test(this.reddit.clientId)) {
+    errors.push('Reddit Client ID contains invalid bullet characters (•)');
+  }
+
+  if (this.reddit?.clientSecret && bulletRegex.test(this.reddit.clientSecret)) {
+    errors.push('Reddit Client Secret contains invalid bullet characters (•)');
+  }
+
+  if (this.reddit?.password && bulletRegex.test(this.reddit.password)) {
+    errors.push('Reddit Password contains invalid bullet characters (•)');
   }
 
   if (errors.length > 0) {

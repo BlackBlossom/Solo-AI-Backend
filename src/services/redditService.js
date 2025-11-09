@@ -1,50 +1,60 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 const AppError = require('../utils/appError');
+const configService = require('./configService');
 
 class RedditService {
   constructor() {
     this.baseURL = 'https://oauth.reddit.com';
     this.authURL = 'https://www.reddit.com/api/v1/access_token';
-    this.clientId = process.env.REDDIT_CLIENT_ID;
-    this.clientSecret = process.env.REDDIT_CLIENT_SECRET;
-    this.username = process.env.REDDIT_USERNAME;
-    this.password = process.env.REDDIT_PASSWORD;
-    this.userAgent = process.env.REDDIT_USER_AGENT || 'SoloAI/1.0.0';
     this.accessToken = null;
     this.tokenExpiry = null;
-    
-    if (this.clientId && this.clientSecret && this.username && this.password) {
-      logger.info('Reddit API configuration loaded');
-    } else {
-      logger.warn('Reddit API credentials not configured');
+    this.config = null; // Will be loaded from database
+  }
+
+  /**
+   * Load Reddit configuration from database
+   */
+  async loadConfig() {
+    if (!this.config) {
+      this.config = await configService.getRedditConfig();
+      
+      if (this.config.clientId && this.config.clientSecret && this.config.username && this.config.password) {
+        logger.info('Reddit API configuration loaded from database');
+      } else {
+        logger.warn('Reddit API credentials not configured in database');
+      }
     }
+    return this.config;
   }
 
   /**
    * Get OAuth access token
    */
   async getAccessToken() {
+    // Load config from database
+    const config = await this.loadConfig();
+    
     // Return cached token if still valid
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       return this.accessToken;
     }
 
     try {
-      const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+      const auth = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64');
       
       const response = await axios.post(
         this.authURL,
         new URLSearchParams({
           grant_type: 'password',
-          username: this.username,
-          password: this.password
+          username: config.username,
+          password: config.password
         }),
         {
           headers: {
             'Authorization': `Basic ${auth}`,
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': this.userAgent
+            'User-Agent': config.userAgent || 'SoloAI/1.0.0'
           }
         }
       );
@@ -67,13 +77,14 @@ class RedditService {
    */
   async makeRequest(endpoint, params = {}) {
     try {
+      const config = await this.loadConfig();
       const token = await this.getAccessToken();
 
       const response = await axios.get(`${this.baseURL}${endpoint}`, {
         params,
         headers: {
           'Authorization': `Bearer ${token}`,
-          'User-Agent': this.userAgent
+          'User-Agent': config.userAgent || 'SoloAI/1.0.0'
         },
         timeout: 10000
       });
@@ -99,8 +110,10 @@ class RedditService {
    * Search Reddit for posts related to keyword
    */
   async searchPosts(keyword, options = {}) {
-    if (!this.clientId || !this.clientSecret) {
-      throw new AppError('Reddit API not configured', 500);
+    const config = await this.loadConfig();
+    
+    if (!config.clientId || !config.clientSecret) {
+      throw new AppError('Reddit API not configured in database settings', 500);
     }
 
     try {
@@ -161,8 +174,10 @@ class RedditService {
    * Get posts from specific subreddit
    */
   async getSubredditPosts(subreddit, options = {}) {
-    if (!this.clientId || !this.clientSecret) {
-      throw new AppError('Reddit API not configured', 500);
+    const config = await this.loadConfig();
+    
+    if (!config.clientId || !config.clientSecret) {
+      throw new AppError('Reddit API not configured in database settings', 500);
     }
 
     try {
