@@ -94,6 +94,7 @@ const seedSettings = async () => {
 
       // API Keys
       apiKeys: {
+        perplexityApiKey: process.env.PERPLEXITY_API_KEY || '',
         geminiApiKey: process.env.GEMINI_API_KEY || '',
         bundleSocialApiKey: process.env.BUNDLE_SOCIAL_API_KEY || '',
         bundleSocialOrgId: process.env.BUNDLE_SOCIAL_ORG_ID || ''
@@ -160,6 +161,7 @@ const seedSettings = async () => {
     log.info(`   Allowed Formats: ${settingsData.videoUpload.allowedFormats.join(', ')}`);
 
     console.log('\n🔑 API Keys:');
+    log.info(`   Perplexity API Key: ${maskValue(settingsData.apiKeys.perplexityApiKey)}`);
     log.info(`   Gemini API Key: ${maskValue(settingsData.apiKeys.geminiApiKey)}`);
     log.info(`   Bundle.social API Key: ${maskValue(settingsData.apiKeys.bundleSocialApiKey)}`);
     log.info(`   Bundle.social Org ID: ${settingsData.apiKeys.bundleSocialOrgId || '(not set)'}`);

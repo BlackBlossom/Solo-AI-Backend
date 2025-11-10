@@ -1,5 +1,5 @@
 const Video = require('../models/Video');
-const geminiService = require('../services/geminiService');
+const perplexityService = require('../services/perplexityService');
 const { 
   sendSuccess, 
   sendBadRequest, 
@@ -10,7 +10,7 @@ const logger = require('../utils/logger');
 // Generate AI caption for video
 const generateCaption = async (req, res, next) => {
   try {
-    const { videoId, prompt, tone, includeHashtags, maxLength, platform } = req.body;
+    const { videoId, tone, includeHashtags, maxLength, platform, platforms } = req.body;
 
     // Verify video exists and belongs to user
     const video = await Video.findOne({
@@ -22,16 +22,21 @@ const generateCaption = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
+    // Validate platform(s)
+    if (platforms && !Array.isArray(platforms)) {
+      return sendBadRequest(res, 'platforms must be an array');
+    }
+
     const options = {
-      prompt,
       tone: tone || 'casual',
       includeHashtags: includeHashtags !== false,
       maxLength: maxLength || 300,
-      platform: platform || 'general'
+      platform: platform || 'instagram',
+      platforms: platforms || []
     };
 
-    // Generate AI caption using Gemini
-    const result = await geminiService.generateCaption(video, options);
+    // Generate AI caption using Perplexity
+    const result = await perplexityService.generateCaption(video, options);
 
     // Update video with generated content
     video.aiGeneratedCaption = result.caption;
@@ -42,14 +47,17 @@ const generateCaption = async (req, res, next) => {
       videoId: video._id, 
       userId: req.user.id,
       captionLength: result.caption.length,
-      hashtagCount: result.hashtags.length
+      hashtagCount: result.hashtags.length,
+      platform: result.platform
     });
 
     sendSuccess(res, 'AI caption generated successfully', {
       caption: result.caption,
       hashtags: result.hashtags,
       fullText: result.fullText,
-      videoId: video._id
+      videoId: video._id,
+      platform: result.platform,
+      model: result.model
     });
   } catch (error) {
     logger.error('Generate AI caption error:', error);
@@ -68,19 +76,21 @@ const generateHashtags = async (req, res, next) => {
 
     const options = {
       maxCount: maxCount || 10,
-      platform: platform || 'general'
+      platform: platform || 'instagram'
     };
 
-    const hashtags = await geminiService.generateHashtags(content, options);
+    const hashtags = await perplexityService.generateHashtags(content, options);
 
     logger.info('AI hashtags generated:', { 
       userId: req.user.id,
       hashtagCount: hashtags.length,
-      contentLength: content.length
+      contentLength: content.length,
+      platform: options.platform
     });
 
     sendSuccess(res, 'Hashtags generated successfully', {
       hashtags,
+      platform: options.platform,
       content: content.substring(0, 100) + (content.length > 100 ? '...' : '')
     });
   } catch (error) {
@@ -102,8 +112,8 @@ const optimizeCaption = async (req, res, next) => {
       return sendBadRequest(res, 'Platform is required for optimization');
     }
 
-    // Use Gemini to optimize caption for platform
-    const optimizedCaption = await geminiService.optimizeForPlatform(caption, platform);
+    // Use Perplexity to optimize caption for platform
+    const optimizedCaption = await perplexityService.optimizeForPlatform(caption, platform);
 
     logger.info('Caption optimized for platform:', { 
       userId: req.user.id,
@@ -127,6 +137,7 @@ const optimizeCaption = async (req, res, next) => {
 const getVideoSuggestions = async (req, res, next) => {
   try {
     const { videoId } = req.params;
+    const { tone } = req.query;
 
     // Verify video exists and belongs to user
     const video = await Video.findOne({
@@ -139,44 +150,25 @@ const getVideoSuggestions = async (req, res, next) => {
     }
 
     // Generate suggestions for multiple platforms
-    const platforms = ['instagram', 'tiktok', 'youtube', 'facebook'];
-    const suggestions = {};
-
-    await Promise.all(
-      platforms.map(async (platform) => {
-        try {
-          const result = await geminiService.generateCaption(video, {
-            platform,
-            tone: 'casual',
-            includeHashtags: true,
-            maxLength: platform === 'twitter' ? 280 : 300
-          });
-
-          suggestions[platform] = {
-            caption: result.caption,
-            hashtags: result.hashtags,
-            fullText: result.fullText
-          };
-        } catch (platformError) {
-          logger.warn(`Failed to generate suggestion for ${platform}:`, platformError.message);
-          suggestions[platform] = {
-            caption: video.aiGeneratedCaption || '',
-            hashtags: video.aiGeneratedHashtags || [],
-            error: 'Failed to generate platform-specific suggestion'
-          };
-        }
-      })
+    const platforms = ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin'];
+    
+    const suggestions = await perplexityService.generateMultiPlatformSuggestions(
+      video,
+      platforms,
+      tone || 'casual'
     );
 
     logger.info('AI suggestions generated for video:', { 
       videoId: video._id, 
       userId: req.user.id,
-      platformCount: Object.keys(suggestions).length
+      platformCount: Object.keys(suggestions).length,
+      tone: tone || 'casual'
     });
 
     sendSuccess(res, 'Video suggestions generated', {
       videoId: video._id,
       videoTitle: video.title,
+      tone: tone || 'casual',
       suggestions
     });
   } catch (error) {
@@ -231,21 +223,30 @@ const analyzeContent = async (req, res, next) => {
 const getAIStatus = async (req, res, next) => {
   try {
     const status = {
-      available: !!process.env.GEMINI_API_KEY,
-      model: 'gemini-2.5-flash',
+      available: !!process.env.PERPLEXITY_API_KEY,
+      provider: 'Perplexity AI',
+      model: 'sonar',
+      models: {
+        search: 'sonar - Fast search model (default)',
+        searchPro: 'sonar-pro - Advanced search',
+        reasoning: 'sonar-reasoning - Real-time reasoning',
+        reasoningPro: 'sonar-reasoning-pro - Precise reasoning with CoT',
+        research: 'sonar-deep-research - Exhaustive research'
+      },
       capabilities: {
         captionGeneration: true,
         hashtagGeneration: true,
         platformOptimization: true,
         contentAnalysis: true,
-        multiPlatformSuggestions: true
+        multiPlatformSuggestions: true,
+        realTimeData: true // Perplexity has access to real-time web data
       },
-      supportedPlatforms: ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin'],
-      supportedTones: ['professional', 'casual', 'funny', 'inspirational', 'educational'],
+      supportedPlatforms: ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin', 'pinterest'],
+      supportedTones: ['professional', 'casual', 'funny', 'inspirational', 'educational', 'storytelling', 'urgent', 'luxury'],
       limits: {
-        maxCaptionLength: 2200,
+        maxCaptionLength: 5000,
         maxHashtags: 30,
-        requestsPerMinute: 10
+        requestsPerMinute: 5 // Rate limited
       }
     };
 
@@ -256,11 +257,32 @@ const getAIStatus = async (req, res, next) => {
   }
 };
 
+// Check Perplexity API health
+const checkAIHealth = async (req, res, next) => {
+  try {
+    const health = await perplexityService.checkAPIHealth();
+    
+    if (health.healthy) {
+      sendSuccess(res, 'Perplexity API is healthy', health);
+    } else {
+      res.status(503).json({
+        status: 'error',
+        message: 'Perplexity API is unavailable',
+        data: health
+      });
+    }
+  } catch (error) {
+    logger.error('Check AI health error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   generateCaption,
   generateHashtags,
   optimizeCaption,
   getVideoSuggestions,
   analyzeContent,
-  getAIStatus
+  getAIStatus,
+  checkAIHealth
 };
