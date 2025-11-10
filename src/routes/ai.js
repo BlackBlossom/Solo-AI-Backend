@@ -50,31 +50,31 @@ router.use(protect);
  *                         available:
  *                           type: boolean
  *                           example: true
-                         provider:
-                           type: string
-                           example: Perplexity AI
-                         model:
-                           type: string
-                           example: sonar
-                         models:
-                           type: object
-                           properties:
-                             search:
-                               type: string
-                               example: sonar - Fast search model (default)
-                             searchPro:
-                               type: string
-                               example: sonar-pro - Advanced search
-                             reasoning:
-                               type: string
-                               example: sonar-reasoning - Real-time reasoning
-                             reasoningPro:
-                               type: string
-                               example: sonar-reasoning-pro - Precise reasoning with CoT
-                             research:
-                               type: string
-                               example: sonar-deep-research - Exhaustive research
-                         capabilities:
+ *                         provider:
+ *                           type: string
+ *                           example: Perplexity AI
+ *                         model:
+ *                           type: string
+ *                           example: sonar
+ *                         models:
+ *                           type: object
+ *                           properties:
+ *                             search:
+ *                               type: string
+ *                               example: sonar - Fast search model (default)
+ *                             searchPro:
+ *                               type: string
+ *                               example: sonar-pro - Advanced search
+ *                             reasoning:
+ *                               type: string
+ *                               example: sonar-reasoning - Real-time reasoning
+ *                             reasoningPro:
+ *                               type: string
+ *                               example: sonar-reasoning-pro - Precise reasoning with CoT
+ *                             research:
+ *                               type: string
+ *                               example: sonar-deep-research - Exhaustive research
+ *                         capabilities:
  *                           type: object
  *                           properties:
  *                             captionGeneration:
@@ -99,18 +99,18 @@ router.use(protect);
  *                           items:
  *                             type: string
  *                           example: [professional, casual, funny, inspirational, educational, storytelling, urgent, luxury]
-                         limits:
-                           type: object
-                           properties:
-                             maxCaptionLength:
-                               type: number
-                               example: 5000
-                             maxHashtags:
-                               type: number
-                               example: 30
-                             requestsPerMinute:
-                               type: number
-                               example: 5
+ *                         limits:
+ *                           type: object
+ *                           properties:
+ *                             maxCaptionLength:
+ *                               type: number
+ *                               example: 5000
+ *                             maxHashtags:
+ *                               type: number
+ *                               example: 30
+ *                             requestsPerMinute:
+ *                               type: number
+ *                               example: 5
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
