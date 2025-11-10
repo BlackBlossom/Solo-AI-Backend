@@ -113,6 +113,11 @@ const settingsSchema = new mongoose.Schema({
 
   // API Keys
   apiKeys: {
+    perplexityApiKey: {
+      type: String,
+      select: false, // Don't return by default for security
+      default: process.env.PERPLEXITY_API_KEY || ''
+    },
     geminiApiKey: {
       type: String,
       select: false, // Don't return by default for security
@@ -269,6 +274,7 @@ settingsSchema.methods.toPublicJSON = function() {
     }
   }
   if (obj.apiKeys) {
+    delete obj.apiKeys.perplexityApiKey;
     delete obj.apiKeys.geminiApiKey;
     delete obj.apiKeys.bundleSocialApiKey;
   }
@@ -301,6 +307,10 @@ settingsSchema.methods.toMaskedJSON = function() {
     obj.email = obj.email || {};
     obj.email.smtp = obj.email.smtp || {};
     obj.email.smtp.pass = this.maskSecret(this.email.smtp.pass);
+  }
+  if (this.apiKeys?.perplexityApiKey) {
+    obj.apiKeys = obj.apiKeys || {};
+    obj.apiKeys.perplexityApiKey = this.maskSecret(this.apiKeys.perplexityApiKey);
   }
   if (this.apiKeys?.geminiApiKey) {
     obj.apiKeys = obj.apiKeys || {};
@@ -358,6 +368,11 @@ settingsSchema.methods.toFullJSON = function() {
     obj.email.smtp.pass = this.email.smtp.pass;
   }
   
+  if (this.apiKeys?.perplexityApiKey !== undefined) {
+    obj.apiKeys = obj.apiKeys || {};
+    obj.apiKeys.perplexityApiKey = this.apiKeys.perplexityApiKey;
+  }
+  
   if (this.apiKeys?.geminiApiKey !== undefined) {
     obj.apiKeys = obj.apiKeys || {};
     obj.apiKeys.geminiApiKey = this.apiKeys.geminiApiKey;
@@ -404,6 +419,7 @@ settingsSchema.statics.getSettings = async function() {
     .select('+mongodb.uri')
     .select('+email.resend.apiKey')
     .select('+email.smtp.pass')
+    .select('+apiKeys.perplexityApiKey')
     .select('+apiKeys.geminiApiKey')
     .select('+apiKeys.bundleSocialApiKey')
     .select('+reddit.clientId')
@@ -422,6 +438,7 @@ settingsSchema.statics.getSettings = async function() {
       .select('+mongodb.uri')
       .select('+email.resend.apiKey')
       .select('+email.smtp.pass')
+      .select('+apiKeys.perplexityApiKey')
       .select('+apiKeys.geminiApiKey')
       .select('+apiKeys.bundleSocialApiKey')
       .select('+reddit.clientId')
@@ -476,6 +493,10 @@ settingsSchema.pre('save', function(next) {
 
   if (this.email?.smtp?.pass && bulletRegex.test(this.email.smtp.pass)) {
     errors.push('SMTP Password contains invalid bullet characters (•)');
+  }
+
+  if (this.apiKeys?.perplexityApiKey && bulletRegex.test(this.apiKeys.perplexityApiKey)) {
+    errors.push('Perplexity API Key contains invalid bullet characters (•)');
   }
 
   if (this.apiKeys?.geminiApiKey && bulletRegex.test(this.apiKeys.geminiApiKey)) {

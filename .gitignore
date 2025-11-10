@@ -57,3 +57,5 @@ migrate-user-posts-videos.js
 migrate-user-status.js
 test-disclosure-levels.js
 ignore
+public/inspiration.html
+test-perplexity.js
