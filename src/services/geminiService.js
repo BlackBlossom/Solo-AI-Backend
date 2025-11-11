@@ -1,23 +1,66 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const logger = require('../utils/logger');
+const configService = require('./configService');
 
 class GeminiService {
   constructor() {
-    if (!process.env.GEMINI_API_KEY) {
-      logger.warn('Gemini API key not configured - AI caption generation will not work');
-      this.genAI = null;
-      return;
-    }
+    this.genAI = null;
+    this.model = null;
+    this.initialized = false;
+    
+    // Initialize asynchronously
+    this.initPromise = this.initialize();
+  }
 
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Use gemini-2.0-flash-exp (latest) or fallback to gemini-1.5-flash
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+  /**
+   * Initialize Gemini client with settings from database (prioritized) or env
+   */
+  async initialize() {
+    try {
+      // Get API key from database settings first, fallback to env
+      const apiKeys = await configService.getApiKeys();
+      const geminiKey = apiKeys.geminiApiKey || process.env.GEMINI_API_KEY || '';
+      
+      if (!geminiKey) {
+        logger.warn('Gemini API key not configured in database or environment - AI caption generation will not work');
+        return;
+      }
+
+      this.genAI = new GoogleGenerativeAI(geminiKey);
+      // Use gemini-2.0-flash-exp (latest) or fallback to gemini-1.5-flash
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      this.initialized = true;
+      
+      logger.info('Gemini service initialized successfully', {
+        source: apiKeys.geminiApiKey ? 'database' : 'environment'
+      });
+    } catch (error) {
+      logger.error('Failed to initialize Gemini service:', error.message);
+      // Fallback to environment variable
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+        this.genAI = new GoogleGenerativeAI(geminiKey);
+        this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        this.initialized = true;
+        logger.info('Gemini service initialized with environment variable');
+      }
+    }
+  }
+
+  /**
+   * Ensure service is initialized before use
+   */
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initPromise;
+    }
+    if (!this.genAI || !this.model) {
+      throw new Error('Gemini API not configured. Please add it in Settings or environment variables.');
+    }
   }
 
   async generateCaption(video, options = {}) {
-    if (!this.genAI) {
-      throw new Error('Gemini API not configured. Please add GEMINI_API_KEY to environment variables.');
-    }
+    await this.ensureInitialized();
 
     try {
       const {

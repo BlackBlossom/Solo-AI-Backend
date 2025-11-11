@@ -58,11 +58,20 @@ const uploadVideo = async (req, res, next) => {
         duration: bundleUpload.videoLength // Bundle.social returns duration as videoLength
       });
 
+      // Add video ID to user's videos array
+      const User = require('../models/User');
+      await User.findByIdAndUpdate(
+        req.user.id,
+        { $addToSet: { videos: video._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+
       logger.info('Video uploaded successfully directly to Bundle.social:', { 
         videoId: video._id, 
         bundleUploadId: bundleUpload.id,
         userId: req.user.id,
-        storageType: 'bundle_social_direct'
+        storageType: 'bundle_social_direct',
+        addedToUserProfile: true
       });
 
       sendCreated(res, 'Video uploaded successfully to Bundle.social', { 
@@ -264,11 +273,20 @@ const deleteVideo = async (req, res, next) => {
 
     await Video.findByIdAndDelete(req.params.id);
 
+    // Remove video ID from user's videos array
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { videos: req.params.id } }, // $pull removes the video ID
+      { new: true }
+    );
+
     logger.info('Video deleted successfully:', { 
       videoId: req.params.id, 
       userId: req.user.id,
       storageType: video.storageType,
-      bundleUploadId: video.bundleUploadId
+      bundleUploadId: video.bundleUploadId,
+      removedFromUserProfile: true
     });
 
     sendSuccess(res, 'Video deleted successfully');
@@ -468,9 +486,18 @@ const getAllUploads = async (req, res, next) => {
 
           syncedVideoIds.push(newVideo._id);
           
+          // Add video ID to user's videos array
+          const User = require('../models/User');
+          await User.findByIdAndUpdate(
+            req.user.id,
+            { $addToSet: { videos: newVideo._id } },
+            { new: true }
+          );
+          
           logger.info('Created new video from Bundle.social upload:', {
             videoId: newVideo._id,
-            bundleUploadId: upload.id
+            bundleUploadId: upload.id,
+            addedToUserProfile: true
           });
         } catch (createError) {
           logger.error('Failed to create video from upload:', {

@@ -1,5 +1,6 @@
 const Video = require('../models/Video');
 const perplexityService = require('../services/perplexityService');
+const configService = require('../services/configService');
 const { 
   sendSuccess, 
   sendBadRequest, 
@@ -222,8 +223,12 @@ const analyzeContent = async (req, res, next) => {
 // Get AI service status and capabilities
 const getAIStatus = async (req, res, next) => {
   try {
+    // Get API key from database settings first
+    const apiKeys = await configService.getApiKeys();
+    const perplexityKey = apiKeys.perplexityApiKey || process.env.PERPLEXITY_API_KEY;
+    
     const status = {
-      available: !!process.env.PERPLEXITY_API_KEY,
+      available: !!perplexityKey,
       provider: 'Perplexity AI',
       model: 'sonar',
       models: {
@@ -247,7 +252,8 @@ const getAIStatus = async (req, res, next) => {
         maxCaptionLength: 5000,
         maxHashtags: 30,
         requestsPerMinute: 5 // Rate limited
-      }
+      },
+      configSource: apiKeys.perplexityApiKey ? 'database' : 'environment'
     };
 
     sendSuccess(res, 'AI service status retrieved', { status });

@@ -1003,9 +1003,22 @@ const deleteVideo = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
+    // Remove video ID from user's videos array
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(
+      video.user,
+      { $pull: { videos: video._id } }, // $pull removes the video ID
+      { new: true }
+    );
+
     await video.deleteOne();
 
-    logger.info('Video deleted by admin:', { videoId: video._id, adminId: req.admin._id });
+    logger.info('Video deleted by admin:', { 
+      videoId: video._id, 
+      adminId: req.admin._id,
+      userId: video.user,
+      removedFromUserProfile: true
+    });
 
     sendSuccess(res, 'Video deleted successfully');
   } catch (error) {
@@ -1073,9 +1086,22 @@ const deletePost = async (req, res, next) => {
       return sendNotFound(res, 'Post not found');
     }
 
+    // Remove post ID from user's posts array
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(
+      post.user,
+      { $pull: { posts: post._id } }, // $pull removes the post ID
+      { new: true }
+    );
+
     await post.deleteOne();
 
-    logger.info('Post deleted by admin:', { postId: post._id, adminId: req.admin._id });
+    logger.info('Post deleted by admin:', { 
+      postId: post._id, 
+      adminId: req.admin._id,
+      userId: post.user,
+      removedFromUserProfile: true
+    });
 
     sendSuccess(res, 'Post deleted successfully');
   } catch (error) {
