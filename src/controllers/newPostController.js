@@ -187,6 +187,14 @@ const createImmediatePost = async (req, res, next) => {
       
       await post.save();
 
+      // Add post ID to user's posts array
+      const User = require('../models/User');
+      await User.findByIdAndUpdate(
+        req.user.id,
+        { $addToSet: { posts: post._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+
       // Send notification email
       emailService.sendPostPublishedNotification(req.user, post).catch(err => {
         logger.warn('Failed to send post notification:', err.message);
@@ -195,7 +203,8 @@ const createImmediatePost = async (req, res, next) => {
       logger.info('Immediate post published successfully:', { 
         postId: post._id, 
         bundlePostId: bundlePost.id,
-        userId: req.user.id
+        userId: req.user.id,
+        addedToUserProfile: true
       });
 
       sendSuccess(res, 'Post published immediately', {
@@ -420,11 +429,20 @@ const createScheduledPost = async (req, res, next) => {
       
       await post.save();
 
+      // Add post ID to user's posts array
+      const User = require('../models/User');
+      await User.findByIdAndUpdate(
+        req.user.id,
+        { $addToSet: { posts: post._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+
       logger.info('Scheduled post created successfully:', { 
         postId: post._id, 
         bundlePostId: bundlePost.id,
         scheduledFor: scheduledDate.toISOString(),
-        userId: req.user.id
+        userId: req.user.id,
+        addedToUserProfile: true
       });
 
       sendSuccess(res, 'Post scheduled successfully', {

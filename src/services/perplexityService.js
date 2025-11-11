@@ -1,15 +1,12 @@
 const { OpenAI } = require('openai');
 const logger = require('../utils/logger');
+const configService = require('./configService');
 
 class PerplexityService {
   constructor() {
-    this.apiKey = process.env.PERPLEXITY_API_KEY || '';
-    
-    // Initialize OpenAI client with Perplexity base URL
-    this.client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: 'https://api.perplexity.ai'
-    });
+    this.apiKey = '';
+    this.client = null;
+    this.initialized = false;
 
     // Available models (as of November 2025)
     this.models = {
@@ -23,8 +20,58 @@ class PerplexityService {
     // Default to basic search model (most cost-effective)
     this.defaultModel = this.models.search;
     
-    if (!this.apiKey) {
-      logger.warn('Perplexity API key not configured - AI caption generation will not work');
+    // Initialize asynchronously
+    this.initPromise = this.initialize();
+  }
+
+  /**
+   * Initialize Perplexity client with settings from database (prioritized) or env
+   */
+  async initialize() {
+    try {
+      // Get API key from database settings first, fallback to env
+      const apiKeys = await configService.getApiKeys();
+      this.apiKey = apiKeys.perplexityApiKey || process.env.PERPLEXITY_API_KEY || '';
+      
+      if (!this.apiKey) {
+        logger.warn('Perplexity API key not configured in database or environment - AI caption generation will not work');
+        return;
+      }
+
+      // Initialize OpenAI client with Perplexity base URL
+      this.client = new OpenAI({
+        apiKey: this.apiKey,
+        baseURL: 'https://api.perplexity.ai'
+      });
+
+      this.initialized = true;
+      logger.info('Perplexity service initialized successfully', {
+        source: apiKeys.perplexityApiKey ? 'database' : 'environment'
+      });
+    } catch (error) {
+      logger.error('Failed to initialize Perplexity service:', error.message);
+      // Fallback to environment variable
+      this.apiKey = process.env.PERPLEXITY_API_KEY || '';
+      if (this.apiKey) {
+        this.client = new OpenAI({
+          apiKey: this.apiKey,
+          baseURL: 'https://api.perplexity.ai'
+        });
+        this.initialized = true;
+        logger.info('Perplexity service initialized with environment variable');
+      }
+    }
+  }
+
+  /**
+   * Ensure service is initialized before use
+   */
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initPromise;
+    }
+    if (!this.apiKey || !this.client) {
+      throw new Error('Perplexity API key not configured. Please add it in Settings or environment variables.');
     }
   }
 
@@ -160,9 +207,7 @@ Generate the caption now following the format exactly.`;
    * Generate caption using Perplexity API with official SDK
    */
   async generateCaption(video, options = {}) {
-    if (!this.apiKey) {
-      throw new Error('Perplexity API key not configured. Add PERPLEXITY_API_KEY to your .env file.');
-    }
+    await this.ensureInitialized();
 
     try {
       const {
@@ -298,9 +343,7 @@ Generate the caption now following the format exactly.`;
    * Generate hashtags only
    */
   async generateHashtags(content, options = {}) {
-    if (!this.apiKey) {
-      throw new Error('Perplexity API key not configured');
-    }
+    await this.ensureInitialized();
 
     try {
       const { maxCount = 10, platform = 'instagram' } = options;
@@ -364,9 +407,7 @@ Format: #hashtag1 #hashtag2 #hashtag3...`;
    * Optimize caption for specific platform
    */
   async optimizeForPlatform(caption, platform) {
-    if (!this.apiKey) {
-      throw new Error('Perplexity API key not configured');
-    }
+    await this.ensureInitialized();
 
     try {
       const platformConfig = this.getPlatformConfig(platform);
@@ -467,12 +508,7 @@ Provide ONLY the optimized caption, no explanations.`;
    * Check API health and credits
    */
   async checkAPIHealth() {
-    if (!this.apiKey) {
-      return {
-        healthy: false,
-        error: 'API key not configured'
-      };
-    }
+    await this.ensureInitialized();
 
     try {
       const completion = await this.client.chat.completions.create({

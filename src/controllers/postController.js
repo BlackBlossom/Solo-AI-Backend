@@ -312,7 +312,19 @@ const deletePost = async (req, res, next) => {
 
     await Post.findByIdAndDelete(req.params.id);
 
-    logger.info('Post deleted successfully:', { postId: req.params.id, userId: req.user.id });
+    // Remove post ID from user's posts array
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { posts: req.params.id } }, // $pull removes the post ID
+      { new: true }
+    );
+
+    logger.info('Post deleted successfully:', { 
+      postId: req.params.id, 
+      userId: req.user.id,
+      removedFromUserProfile: true
+    });
 
     sendSuccess(res, 'Post deleted successfully');
   } catch (error) {

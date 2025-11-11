@@ -1,4 +1,4 @@
-const { bundleSocialAPI } = require('../config/bundleSocial');
+const { bundleSocialAPI, bundleSocialConfig } = require('../config/bundleSocial');
 const FormData = require('form-data');
 const logger = require('../utils/logger');
 
@@ -143,7 +143,7 @@ class BundleSocialService {
       const response = await this.api.post('/upload/', formData, {
         headers: {
           ...formData.getHeaders(),
-          'x-api-key': process.env.BUNDLE_SOCIAL_API_KEY, // Ensure API key is included
+          'x-api-key': bundleSocialConfig.apiKey, // Use config from database/env
         },
         timeout: 300000, // 5 minutes for direct video upload (increased timeout)
         maxContentLength: Infinity,
