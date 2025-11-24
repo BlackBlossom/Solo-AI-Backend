@@ -150,6 +150,33 @@ const userSchema = new mongoose.Schema({
     }]
   },
   
+  // FCM (Firebase Cloud Messaging) device tokens for push notifications
+  fcmTokens: [{
+    token: {
+      type: String,
+      required: true
+    },
+    deviceId: {
+      type: String,
+      default: function() {
+        return `device_${Date.now()}`;
+      }
+    },
+    platform: {
+      type: String,
+      enum: ['android', 'ios', 'web'],
+      required: true
+    },
+    addedAt: {
+      type: Date,
+      default: Date.now
+    },
+    lastUsed: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  
   // Timestamps
   createdAt: {
     type: Date,

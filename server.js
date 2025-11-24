@@ -48,6 +48,10 @@ const initializeServices = async () => {
     const { updateConfigFromDatabase } = require('./src/config/bundleSocial');
     await updateConfigFromDatabase();
     
+    // Initialize trending keywords service (RapidAPI)
+    const trendingService = require('./src/services/trendingService');
+    await trendingService.initialize();
+    
     console.log('✅ All services initialized successfully');
   } catch (error) {
     console.error('⚠️  Service initialization failed:', error.message);

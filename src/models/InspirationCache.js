@@ -13,6 +13,17 @@ const inspirationCacheSchema = new mongoose.Schema({
     default: 'US',
     uppercase: true
   },
+  type: {
+    type: String,
+    enum: ['reddit', 'trends', 'country_trends', 'global_trends'],
+    default: 'reddit',
+    index: true
+  },
+  country: {
+    type: String,
+    trim: true,
+    index: true // For country-specific trending keywords
+  },
   data: {
     googleTrends: {
       interestOverTime: Array,
@@ -22,6 +33,11 @@ const inspirationCacheSchema = new mongoose.Schema({
     reddit: {
       posts: Array,
       totalFound: Number
+    },
+    trending: {
+      keywordsText: [String], // Array of trending keywords
+      lastUpdate: String,
+      scrapedAt: Date
     }
   },
   hitCount: {
@@ -42,8 +58,10 @@ const inspirationCacheSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index for faster lookups
+// Compound indexes for faster lookups
 inspirationCacheSchema.index({ topic: 1, region: 1 });
+inspirationCacheSchema.index({ type: 1, country: 1 });
+inspirationCacheSchema.index({ type: 1, createdAt: -1 });
 inspirationCacheSchema.index({ user: 1, createdAt: -1 });
 
 // Method to increment hit count
@@ -53,10 +71,11 @@ inspirationCacheSchema.methods.incrementHits = async function() {
 };
 
 // Static method to get cached data
-inspirationCacheSchema.statics.getCached = async function(topic, region = 'US', userId = null) {
+inspirationCacheSchema.statics.getCached = async function(topic, region = 'US', userId = null, type = 'reddit') {
   const query = { 
     topic: topic.toLowerCase(), 
-    region: region.toUpperCase() 
+    region: region.toUpperCase(),
+    type
   };
   
   if (userId) {
@@ -64,6 +83,41 @@ inspirationCacheSchema.statics.getCached = async function(topic, region = 'US', 
   }
   
   const cached = await this.findOne(query);
+  
+  if (cached) {
+    await cached.incrementHits();
+  }
+  
+  return cached;
+};
+
+/**
+ * Static method to get cached trending data by country
+ */
+inspirationCacheSchema.statics.getCachedTrends = async function(country, type = 'country_trends') {
+  const query = {
+    country: country,
+    type: type
+  };
+  
+  const cached = await this.findOne(query).sort({ createdAt: -1 });
+  
+  if (cached) {
+    await cached.incrementHits();
+  }
+  
+  return cached;
+};
+
+/**
+ * Static method to get cached global trends
+ */
+inspirationCacheSchema.statics.getCachedGlobalTrends = async function() {
+  const query = {
+    type: 'global_trends'
+  };
+  
+  const cached = await this.findOne(query).sort({ createdAt: -1 });
   
   if (cached) {
     await cached.incrementHits();

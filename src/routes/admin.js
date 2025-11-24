@@ -1,8 +1,14 @@
 const express = require('express');
 const adminController = require('../controllers/adminController');
 const legalController = require('../controllers/legalController');
+const adminNotificationController = require('../controllers/adminNotificationController');
 const { protectAdmin, restrictTo, checkPermission, logActivity } = require('../middleware/adminAuth');
 const { uploadMedia, handleMulterError } = require('../middleware/upload');
+const {
+  validateSendNotification,
+  validateTestNotification,
+  validateTargetUserCount
+} = require('../middleware/notificationValidation');
 
 const router = express.Router();
 
@@ -2241,6 +2247,371 @@ router.delete(
   restrictTo('superadmin'),
   logActivity('delete', 'legal_content'),
   legalController.deleteLegalContent
+);
+
+// ==================== PUSH NOTIFICATIONS ====================
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Admin Notifications
+ *     description: Push notification management via Firebase Cloud Messaging
+ */
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/send:
+ *   post:
+ *     summary: Send push notification to users
+ *     description: |
+ *       Send push notifications to users via Firebase Cloud Messaging.
+ *       Supports three targeting modes:
+ *       - **all**: Send to all users with registered device tokens
+ *       - **individual**: Send to a specific user by ID
+ *       - **segment**: Send to users matching specific criteria
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - body
+ *               - targetType
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 maxLength: 100
+ *                 example: "New Feature Available!"
+ *               body:
+ *                 type: string
+ *                 maxLength: 500
+ *                 example: "Check out our new AI-powered video editing tools"
+ *               type:
+ *                 type: string
+ *                 enum: [announcement, promotion, content_update, account_alert, custom]
+ *                 default: announcement
+ *                 example: "announcement"
+ *               targetType:
+ *                 type: string
+ *                 enum: [all, individual, segment]
+ *                 example: "all"
+ *               targetUserId:
+ *                 type: string
+ *                 description: Required when targetType is "individual"
+ *                 example: "64a1b2c3d4e5f6789012"
+ *               targetSegment:
+ *                 type: object
+ *                 description: Filter criteria when targetType is "segment"
+ *                 properties:
+ *                   loginType:
+ *                     type: string
+ *                     enum: [email, google, apple]
+ *                   status:
+ *                     type: string
+ *                     enum: [active, banned, suspended]
+ *                   createdAfter:
+ *                     type: string
+ *                     format: date-time
+ *                   createdBefore:
+ *                     type: string
+ *                     format: date-time
+ *               data:
+ *                 type: object
+ *                 description: Custom data payload (max 10 keys)
+ *                 example:
+ *                   screen: "home"
+ *                   action: "view_feature"
+ *               deepLink:
+ *                 type: string
+ *                 maxLength: 500
+ *                 example: "soloai://feature/new-editor"
+ *               imageUrl:
+ *                 type: string
+ *                 format: uri
+ *                 example: "https://example.com/image.jpg"
+ *               priority:
+ *                 type: string
+ *                 enum: [high, normal, low]
+ *                 default: normal
+ *               isTest:
+ *                 type: boolean
+ *                 default: false
+ *           examples:
+ *             broadcast_all:
+ *               summary: Broadcast to All Users
+ *               value:
+ *                 title: "🎉 New Feature Alert!"
+ *                 body: "Discover our AI-powered caption generator"
+ *                 type: "announcement"
+ *                 targetType: "all"
+ *                 priority: "high"
+ *                 imageUrl: "https://example.com/feature.jpg"
+ *             individual_user:
+ *               summary: Send to Individual User
+ *               value:
+ *                 title: "Welcome Back!"
+ *                 body: "We've missed you. Check out what's new"
+ *                 type: "account_alert"
+ *                 targetType: "individual"
+ *                 targetUserId: "64a1b2c3d4e5f6789012"
+ *             segment_android:
+ *               summary: Send to Android Users (Segment)
+ *               value:
+ *                 title: "Android Update Available"
+ *                 body: "Update to the latest version for new features"
+ *                 type: "content_update"
+ *                 targetType: "segment"
+ *                 targetSegment:
+ *                   loginType: "google"
+ *                   status: "active"
+ *     responses:
+ *       201:
+ *         description: Notification sent successfully
+ *       400:
+ *         description: Invalid input or no device tokens found
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/notifications/send',
+  protectAdmin,
+  restrictTo('superadmin', 'admin'),
+  checkPermission('users'),
+  validateSendNotification,
+  logActivity('send_notification', 'notification'),
+  adminNotificationController.sendNotification
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications:
+ *   get:
+ *     summary: Get all notifications with pagination
+ *     description: Retrieve notification history with filters
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [announcement, promotion, content_update, account_alert, custom]
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [draft, scheduled, sending, sent, failed, cancelled]
+ *       - in: query
+ *         name: targetType
+ *         schema:
+ *           type: string
+ *           enum: [all, individual, segment]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Notifications retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/notifications',
+  protectAdmin,
+  checkPermission('users'),
+  adminNotificationController.getAllNotifications
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/{id}:
+ *   get:
+ *     summary: Get single notification by ID
+ *     description: Retrieve detailed notification information including delivery stats
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Notification retrieved successfully
+ *       404:
+ *         description: Notification not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/notifications/:id',
+  protectAdmin,
+  checkPermission('users'),
+  adminNotificationController.getNotification
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/stats:
+ *   get:
+ *     summary: Get notification statistics
+ *     description: Retrieve aggregated notification statistics for a time period
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *         description: Number of days to include in statistics
+ *     responses:
+ *       200:
+ *         description: Statistics retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/notifications/stats',
+  protectAdmin,
+  checkPermission('users'),
+  adminNotificationController.getNotificationStats
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/test:
+ *   post:
+ *     summary: Send test notification
+ *     description: Send a test push notification to verify Firebase configuration
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: FCM device token to test with
+ *                 example: "dXJ4K9xR3kY:APA91bH..."
+ *     responses:
+ *       200:
+ *         description: Test notification sent successfully
+ *       400:
+ *         description: Failed to send test notification
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/notifications/test',
+  protectAdmin,
+  restrictTo('superadmin', 'admin'),
+  validateTestNotification,
+  adminNotificationController.testNotification
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/firebase-health:
+ *   get:
+ *     summary: Check Firebase service health
+ *     description: Verify Firebase Cloud Messaging configuration and connectivity
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Firebase service is healthy
+ *       503:
+ *         description: Firebase service is unavailable
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/notifications/firebase-health',
+  protectAdmin,
+  restrictTo('superadmin'),
+  adminNotificationController.checkFirebaseHealth
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/target-count:
+ *   post:
+ *     summary: Get target user count preview
+ *     description: Preview how many users will receive the notification based on targeting criteria
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - targetType
+ *             properties:
+ *               targetType:
+ *                 type: string
+ *                 enum: [all, individual, segment]
+ *               targetUserId:
+ *                 type: string
+ *               targetSegment:
+ *                 type: object
+ *                 properties:
+ *                   loginType:
+ *                     type: string
+ *                     enum: [email, google, apple]
+ *                   status:
+ *                     type: string
+ *                     enum: [active, banned, suspended]
+ *                   createdAfter:
+ *                     type: string
+ *                     format: date-time
+ *                   createdBefore:
+ *                     type: string
+ *                     format: date-time
+ *     responses:
+ *       200:
+ *         description: Target user count retrieved
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/notifications/target-count',
+  protectAdmin,
+  checkPermission('users'),
+  validateTargetUserCount,
+  adminNotificationController.getTargetUserCount
 );
 
 module.exports = router;
