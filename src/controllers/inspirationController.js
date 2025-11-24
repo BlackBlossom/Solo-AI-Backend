@@ -199,9 +199,9 @@ exports.getGlobalTrends = async (req, res, next) => {
     // Check cache first
     const cached = await InspirationCache.getCachedGlobalTrends();
     
-    if (cached) {
+    if (cached && cached.data && cached.data.globalTrends) {
       logger.info('Cache hit for global trending keywords');
-      let data = cached.data.trending;
+      let data = cached.data.globalTrends;
       
       // Apply limit if specified
       if (limit && Array.isArray(data)) {
@@ -211,7 +211,7 @@ exports.getGlobalTrends = async (req, res, next) => {
       
       return sendSuccess(res, 'Global trending keywords retrieved from cache', {
         countries: data,
-        totalCountries: cached.data.trending.length,
+        totalCountries: cached.data.globalTrends.length,
         fromCache: true,
         timestamp: cached.createdAt
       });
@@ -247,7 +247,7 @@ exports.getGlobalTrends = async (req, res, next) => {
         topic: 'global_trends',
         type: 'global_trends',
         data: {
-          trending: trendsData.data
+          globalTrends: trendsData.data // Store full array of country objects
         },
         createdAt: new Date()
       });

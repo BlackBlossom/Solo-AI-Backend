@@ -38,7 +38,9 @@ const inspirationCacheSchema = new mongoose.Schema({
       keywordsText: [String], // Array of trending keywords
       lastUpdate: String,
       scrapedAt: Date
-    }
+    },
+    globalTrends: Array, // Array of country trend objects
+    countryTrends: Object // Country-specific trend object
   },
   hitCount: {
     type: Number,
