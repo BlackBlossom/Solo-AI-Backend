@@ -2441,36 +2441,6 @@ router.get(
 
 /**
  * @swagger
- * /api/v1/admin/notifications/{id}:
- *   get:
- *     summary: Get single notification by ID
- *     description: Retrieve detailed notification information including delivery stats
- *     tags: [Admin Notifications]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Notification retrieved successfully
- *       404:
- *         description: Notification not found
- *       401:
- *         description: Unauthorized
- */
-router.get(
-  '/notifications/:id',
-  protectAdmin,
-  checkPermission('users'),
-  adminNotificationController.getNotification
-);
-
-/**
- * @swagger
  * /api/v1/admin/notifications/stats:
  *   get:
  *     summary: Get notification statistics
@@ -2612,6 +2582,36 @@ router.post(
   checkPermission('users'),
   validateTargetUserCount,
   adminNotificationController.getTargetUserCount
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/{id}:
+ *   get:
+ *     summary: Get single notification by ID
+ *     description: Retrieve detailed notification information including delivery stats
+ *     tags: [Admin Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Notification retrieved successfully
+ *       404:
+ *         description: Notification not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  '/notifications/:id',
+  protectAdmin,
+  checkPermission('users'),
+  adminNotificationController.getNotification
 );
 
 module.exports = router;
