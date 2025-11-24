@@ -93,6 +93,19 @@ const settingsSchema = new mongoose.Schema({
     }
   },
 
+  // Firebase Cloud Messaging Settings
+  firebase: {
+    serviceAccount: {
+      type: String, // JSON string of Firebase service account
+      select: false, // Don't return by default for security
+      default: process.env.FIREBASE_SERVICE_ACCOUNT || ''
+    },
+    enabled: {
+      type: Boolean,
+      default: false
+    }
+  },
+
   // Video Upload Settings
   videoUpload: {
     maxFileSize: {
@@ -161,11 +174,32 @@ const settingsSchema = new mongoose.Schema({
     }
   },
 
+  // RapidAPI Configuration (for Google Trends)
+  rapidApi: {
+    key: {
+      type: String,
+      select: false, // Don't return by default for security
+      default: process.env.RAPIDAPI_KEY || ''
+    },
+    host: {
+      type: String,
+      default: process.env.RAPIDAPI_HOST || 'google-realtime-trends-data-api.p.rapidapi.com'
+    },
+    enabled: {
+      type: Boolean,
+      default: process.env.RAPIDAPI_ENABLED === 'true' || (process.env.RAPIDAPI_KEY ? true : false)
+    }
+  },
+
   // Inspiration API Settings
   inspiration: {
     cacheTTL: {
       type: Number, // in seconds
       default: parseInt(process.env.INSPIRATION_CACHE_TTL) || 86400 // 24 hours
+    },
+    trendsCacheTTL: {
+      type: Number, // in seconds (shorter cache for trending data)
+      default: parseInt(process.env.TRENDS_CACHE_TTL) || 3600 // 1 hour
     }
   },
 
@@ -424,7 +458,8 @@ settingsSchema.statics.getSettings = async function() {
     .select('+apiKeys.bundleSocialApiKey')
     .select('+reddit.clientId')
     .select('+reddit.clientSecret')
-    .select('+reddit.password');
+    .select('+reddit.password')
+    .select('+firebase.serviceAccount');
   
   if (!settings) {
     // Create default settings from environment variables
@@ -443,7 +478,8 @@ settingsSchema.statics.getSettings = async function() {
       .select('+apiKeys.bundleSocialApiKey')
       .select('+reddit.clientId')
       .select('+reddit.clientSecret')
-      .select('+reddit.password');
+      .select('+reddit.password')
+      .select('+firebase.serviceAccount');
   }
   
   return settings;

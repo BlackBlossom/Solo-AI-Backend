@@ -24,6 +24,7 @@ const adminRoutes = require('./routes/admin');
 const legalRoutes = require('./routes/legal');
 const configRoutes = require('./routes/config');
 const inspirationRoutes = require('./routes/inspiration');
+const notificationRoutes = require('./routes/notifications');
 
 // Create Express app
 const app = express();
@@ -238,6 +239,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/legal', legalRoutes);
 app.use('/api/v1/config', configRoutes);
 app.use('/api/v1/inspiration', inspirationRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

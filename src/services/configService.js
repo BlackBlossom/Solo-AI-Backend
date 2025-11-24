@@ -30,7 +30,7 @@ class ConfigService {
       // Fetch from database
       logger.debug('Fetching settings from database');
       const settings = await Settings.findById('app_settings')
-        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.perplexityApiKey +apiKeys.geminiApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password');
+        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.perplexityApiKey +apiKeys.geminiApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password +firebase.serviceAccount +rapidApi.key');
 
       if (!settings) {
         logger.warn('No settings found in database, creating from environment variables');
@@ -112,8 +112,18 @@ class ConfigService {
         password: process.env.REDDIT_PASSWORD || '',
         userAgent: process.env.REDDIT_USER_AGENT || 'SoloAI/1.0.0'
       },
+      rapidApi: {
+        key: process.env.RAPIDAPI_KEY || '',
+        host: process.env.RAPIDAPI_HOST || 'google-realtime-trends-data-api.p.rapidapi.com',
+        enabled: process.env.RAPIDAPI_ENABLED === 'true' || (process.env.RAPIDAPI_KEY ? true : false)
+      },
+      firebase: {
+        serviceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
+        enabled: process.env.FIREBASE_ENABLED === 'true' || false
+      },
       inspiration: {
-        cacheTTL: parseInt(process.env.INSPIRATION_CACHE_TTL) || 86400
+        cacheTTL: parseInt(process.env.INSPIRATION_CACHE_TTL) || 86400,
+        trendsCacheTTL: parseInt(process.env.TRENDS_CACHE_TTL) || 3600
       },
       urls: {
         productionUrl: process.env.PRODUCTION_URL || '',
@@ -241,6 +251,22 @@ class ConfigService {
   async getInspirationConfig() {
     const settings = await this.getSettings();
     return settings.inspiration || this.getFallbackSettings().inspiration;
+  }
+
+  /**
+   * Get Firebase configuration
+   */
+  async getFirebaseConfig() {
+    const settings = await this.getSettings();
+    return settings.firebase || this.getFallbackSettings().firebase;
+  }
+
+  /**
+   * Get RapidAPI configuration
+   */
+  async getRapidApiConfig() {
+    const settings = await this.getSettings();
+    return settings.rapidApi || this.getFallbackSettings().rapidApi;
   }
 
   /**
