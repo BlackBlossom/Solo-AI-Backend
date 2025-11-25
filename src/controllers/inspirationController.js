@@ -1,5 +1,5 @@
 const redditService = require('../services/redditService');
-const trendingService = require('../services/trendingService');
+const trendlyService = require('../services/trendlyService');
 const InspirationCache = require('../models/InspirationCache');
 const logger = require('../utils/logger');
 const { sendSuccess, sendBadRequest } = require('../utils/response');
@@ -118,199 +118,251 @@ exports.getSubredditPosts = async (req, res, next) => {
   }
 };
 
-/**
- * Get trending keywords by country
- */
-exports.getTrendingKeywordsByCountry = async (req, res, next) => {
-  try {
-    const { country } = req.params;
-
-    if (!country) {
-      return sendBadRequest(res, 'Country parameter is required');
-    }
-
-    // Check cache first
-    const cached = await InspirationCache.getCachedTrends(country, 'country_trends');
-    
-    if (cached) {
-      logger.info(`Cache hit for trending keywords in ${country}`);
-      return sendSuccess(res, 'Trending keywords retrieved from cache', {
-        country: cached.country,
-        keywords: cached.data.trending.keywordsText,
-        lastUpdate: cached.data.trending.lastUpdate,
-        scrapedAt: cached.data.trending.scrapedAt,
-        fromCache: true,
-        timestamp: cached.createdAt
-      });
-    }
-
-    // Fetch fresh data from RapidAPI
-    logger.info(`Fetching fresh trending keywords for ${country}`);
-    
-    const trendsData = await trendingService.getTrendsByCountry(country);
-
-    if (!trendsData.success || !trendsData.data) {
-      throw new AppError('Failed to fetch trending keywords', 500);
-    }
-
-    const responseData = {
-      country: trendsData.data.country,
-      keywords: trendsData.data.keywordsText,
-      lastUpdate: trendsData.data.lastUpdate,
-      scrapedAt: trendsData.data.scrapedAt,
-      fromCache: false
-    };
-
-    // Save to cache
-    try {
-      await InspirationCache.create({
-        topic: `trends_${country.toLowerCase()}`,
-        country: country,
-        type: 'country_trends',
-        data: {
-          trending: {
-            keywordsText: trendsData.data.keywordsText,
-            lastUpdate: trendsData.data.lastUpdate,
-            scrapedAt: trendsData.data.scrapedAt
-          }
-        },
-        createdAt: new Date()
-      });
-      logger.info(`Cached trending keywords for ${country}`);
-    } catch (cacheError) {
-      logger.error('Failed to cache trending keywords:', cacheError.message);
-    }
-
-    return sendSuccess(res, 'Trending keywords fetched successfully', responseData);
-
-  } catch (error) {
-    logger.error(`Trending keywords error for ${req.params.country}:`, error);
-    next(new AppError(error.message || 'Failed to fetch trending keywords', error.statusCode || 500));
-  }
-};
+// ============================================================================
+// GOOGLE TRENDS HISTORICAL DATA ENDPOINTS
+// ============================================================================
 
 /**
- * Get global trending keywords (all countries)
+ * Get all available categories
  */
-exports.getGlobalTrends = async (req, res, next) => {
+exports.getCategories = async (req, res, next) => {
   try {
-    const { limit } = req.query;
-
-    // Check cache first
-    const cached = await InspirationCache.getCachedGlobalTrends();
+    logger.info('Fetching Google Trends categories');
     
-    if (cached && cached.data && cached.data.globalTrends) {
-      logger.info('Cache hit for global trending keywords');
-      let data = cached.data.globalTrends;
-      
-      // Apply limit if specified
-      if (limit && Array.isArray(data)) {
-        const limitNum = parseInt(limit);
-        data = data.slice(0, limitNum);
-      }
-      
-      return sendSuccess(res, 'Global trending keywords retrieved from cache', {
-        countries: data,
-        totalCountries: cached.data.globalTrends.length,
-        fromCache: true,
-        timestamp: cached.createdAt
-      });
-    }
+    const categories = await trendlyService.getCategories();
 
-    // Fetch fresh data from RapidAPI
-    logger.info('Fetching fresh global trending keywords');
-    
-    const trendsData = await trendingService.getGlobalTrends();
-
-    if (!trendsData.success || !trendsData.data) {
-      throw new AppError('Failed to fetch global trends', 500);
-    }
-
-    let countriesData = trendsData.data;
-    
-    // Apply limit if specified
-    if (limit) {
-      const limitNum = parseInt(limit);
-      countriesData = countriesData.slice(0, limitNum);
-    }
-
-    const responseData = {
-      countries: countriesData,
-      totalCountries: trendsData.data.length,
-      fromCache: false,
-      timestamp: trendsData.timestamp
-    };
-
-    // Save to cache
-    try {
-      await InspirationCache.create({
-        topic: 'global_trends',
-        type: 'global_trends',
-        data: {
-          globalTrends: trendsData.data // Store full array of country objects
-        },
-        createdAt: new Date()
-      });
-      logger.info('Cached global trending keywords');
-    } catch (cacheError) {
-      logger.error('Failed to cache global trends:', cacheError.message);
-    }
-
-    return sendSuccess(res, 'Global trending keywords fetched successfully', responseData);
-
-  } catch (error) {
-    logger.error('Global trends error:', error);
-    next(new AppError(error.message || 'Failed to fetch global trends', error.statusCode || 500));
-  }
-};
-
-/**
- * Get available countries list
- */
-exports.getAvailableCountries = async (req, res, next) => {
-  try {
-    logger.info('Fetching available countries list');
-    
-    const countries = await trendingService.getAvailableCountries();
-
-    return sendSuccess(res, 'Available countries retrieved successfully', {
-      countries,
-      total: countries.length
+    return sendSuccess(res, 'Categories retrieved successfully', {
+      categories,
+      total: categories.length
     });
 
   } catch (error) {
-    logger.error('Available countries error:', error);
-    next(new AppError('Failed to fetch available countries', 500));
+    logger.error('Categories error:', error);
+    next(new AppError(error.message || 'Failed to fetch categories', 500));
   }
 };
 
 /**
- * Get trending keywords by region
+ * Get all geographic options (countries and regions)
  */
-exports.getTrendingByRegion = async (req, res, next) => {
+exports.getGeographic = async (req, res, next) => {
   try {
-    const { region } = req.params;
-
-    if (!region) {
-      return sendBadRequest(res, 'Region parameter is required');
-    }
-
-    logger.info(`Fetching trending keywords for region: ${region}`);
+    logger.info('Fetching Google Trends geographic options');
     
-    const trendsData = await trendingService.getTrendsByRegion(region);
+    const geo = await trendlyService.getGeographic();
 
-    return sendSuccess(res, `Trending keywords for ${region} retrieved successfully`, {
-      region,
-      countries: trendsData.map(t => ({
-        country: t.data?.country,
-        keywords: t.data?.keywordsText,
-        lastUpdate: t.data?.lastUpdate
-      })),
-      total: trendsData.length
+    const countryCount = geo.countries ? Object.keys(geo.countries).length : 0;
+
+    return sendSuccess(res, 'Geographic options retrieved successfully', {
+      geo,
+      countriesCount: countryCount
     });
 
   } catch (error) {
-    logger.error(`Region trends error for ${req.params.region}:`, error);
-    next(new AppError(error.message || 'Failed to fetch regional trends', 500));
+    logger.error('Geographic options error:', error);
+    next(new AppError(error.message || 'Failed to fetch geographic options', 500));
+  }
+};
+
+/**
+ * Get interest over time for keywords
+ */
+exports.getInterestOverTime = async (req, res, next) => {
+  try {
+    const { keywords, start, country, region, category, gprop } = req.body;
+
+    if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+      return sendBadRequest(res, 'Keywords array is required');
+    }
+
+    if (!start) {
+      return sendBadRequest(res, 'Start date is required (format: YYYY-MM-DDTHH:mm:ss+0100)');
+    }
+
+    logger.info('Fetching interest over time', { keywords: keywords.join(', ') });
+
+    const data = await trendlyService.getInterestOverTime({
+      keywords,
+      start,
+      country: country || '',
+      region: region || '',
+      category: category || '',
+      gprop: gprop || ''
+    });
+
+    return sendSuccess(res, 'Interest over time data retrieved successfully', {
+      data,
+      keywords,
+      country: country || 'worldwide',
+      startDate: start
+    });
+
+  } catch (error) {
+    logger.error('Interest over time error:', error);
+    next(new AppError(error.message || 'Failed to fetch interest over time', 500));
+  }
+};
+
+/**
+ * Get interest by region for keywords
+ */
+exports.getInterestByRegion = async (req, res, next) => {
+  try {
+    const { keywords, start, country, region, category, gprop, resolution, include_low_volume } = req.body;
+
+    if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+      return sendBadRequest(res, 'Keywords array is required');
+    }
+
+    if (!start) {
+      return sendBadRequest(res, 'Start date is required');
+    }
+
+    logger.info('Fetching interest by region', { keywords: keywords.join(', ') });
+
+    const data = await trendlyService.getInterestByRegion({
+      keywords,
+      start,
+      country: country || '',
+      region: region || '',
+      category: category || '',
+      gprop: gprop || '',
+      resolution: resolution || 'COUNTRY',
+      include_low_volume: include_low_volume || false
+    });
+
+    return sendSuccess(res, 'Interest by region data retrieved successfully', {
+      data,
+      keywords,
+      resolution: resolution || 'COUNTRY'
+    });
+
+  } catch (error) {
+    logger.error('Interest by region error:', error);
+    next(new AppError(error.message || 'Failed to fetch interest by region', 500));
+  }
+};
+
+/**
+ * Get related queries for keywords
+ */
+exports.getRelatedQueries = async (req, res, next) => {
+  try {
+    const { keywords, start, country, region, category, gprop } = req.body;
+
+    if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+      return sendBadRequest(res, 'Keywords array is required');
+    }
+
+    if (!start) {
+      return sendBadRequest(res, 'Start date is required');
+    }
+
+    logger.info('Fetching related queries', { keywords: keywords.join(', ') });
+
+    const data = await trendlyService.getRelatedQueries({
+      keywords,
+      start,
+      country: country || '',
+      region: region || '',
+      category: category || '',
+      gprop: gprop || ''
+    });
+
+    return sendSuccess(res, 'Related queries retrieved successfully', {
+      data,
+      keywords
+    });
+
+  } catch (error) {
+    logger.error('Related queries error:', error);
+    next(new AppError(error.message || 'Failed to fetch related queries', 500));
+  }
+};
+
+/**
+ * Get related topics for a keyword
+ */
+exports.getRelatedTopics = async (req, res, next) => {
+  try {
+    const { keywords, start, country, region, category, gprop } = req.body;
+
+    if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+      return sendBadRequest(res, 'Keywords array is required');
+    }
+
+    if (!start) {
+      return sendBadRequest(res, 'Start date is required');
+    }
+
+    logger.info('Fetching related topics', { keyword: keywords[0] });
+
+    const data = await trendlyService.getRelatedTopics({
+      keywords,
+      start,
+      country: country || '',
+      region: region || '',
+      category: category || '',
+      gprop: gprop || ''
+    });
+
+    return sendSuccess(res, 'Related topics retrieved successfully', {
+      data,
+      keyword: keywords[0]
+    });
+
+  } catch (error) {
+    logger.error('Related topics error:', error);
+    next(new AppError(error.message || 'Failed to fetch related topics', 500));
+  }
+};
+
+/**
+ * Get realtime searches
+ */
+exports.getRealtimeSearches = async (req, res, next) => {
+  try {
+    const { country, category } = req.body;
+
+    logger.info('Fetching realtime searches', { country: country || 'worldwide' });
+
+    const data = await trendlyService.getRealtimeSearches({
+      country: country || '',
+      category: category || 'All categories'
+    });
+
+    return sendSuccess(res, 'Realtime searches retrieved successfully', {
+      data,
+      country: country || 'worldwide'
+    });
+
+  } catch (error) {
+    logger.error('Realtime searches error:', error);
+    next(new AppError(error.message || 'Failed to fetch realtime searches', 500));
+  }
+};
+
+/**
+ * Get today's top searches
+ */
+exports.getTodaySearches = async (req, res, next) => {
+  try {
+    const { country, category } = req.body;
+
+    logger.info('Fetching today searches', { country: country || 'worldwide' });
+
+    const data = await trendlyService.getTodaySearches({
+      country: country || '',
+      category: category || 'All categories'
+    });
+
+    return sendSuccess(res, 'Today searches retrieved successfully', {
+      data,
+      country: country || 'worldwide'
+    });
+
+  } catch (error) {
+    logger.error('Today searches error:', error);
+    next(new AppError(error.message || 'Failed to fetch today searches', 500));
   }
 };

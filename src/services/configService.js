@@ -114,7 +114,6 @@ class ConfigService {
       },
       rapidApi: {
         key: process.env.RAPIDAPI_KEY || '',
-        host: process.env.RAPIDAPI_HOST || 'google-realtime-trends-data-api.p.rapidapi.com',
         enabled: process.env.RAPIDAPI_ENABLED === 'true' || (process.env.RAPIDAPI_KEY ? true : false)
       },
       firebase: {
