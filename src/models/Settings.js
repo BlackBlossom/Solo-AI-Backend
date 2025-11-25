@@ -181,10 +181,6 @@ const settingsSchema = new mongoose.Schema({
       select: false, // Don't return by default for security
       default: process.env.RAPIDAPI_KEY || ''
     },
-    host: {
-      type: String,
-      default: process.env.RAPIDAPI_HOST || 'google-realtime-trends-data-api.p.rapidapi.com'
-    },
     enabled: {
       type: Boolean,
       default: process.env.RAPIDAPI_ENABLED === 'true' || (process.env.RAPIDAPI_KEY ? true : false)

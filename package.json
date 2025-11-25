@@ -9,6 +9,8 @@
     "test": "jest",
     "seed": "node src/database/seed.js",
     "seed:settings": "node src/database/seedSettings.js",
+    "seed:google-trends": "node src/database/seedTrendlyOptions.js",
+    "clear:trends-cache": "node src/database/clearTrendsCache.js",
     "lint": "eslint src/",
     "format": "prettier --write src/"
   },
