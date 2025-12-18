@@ -148,6 +148,63 @@ router.use(protectAdmin);
  *     responses:
  *       200:
  *         description: Dashboard stats retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         users:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                               example: 1542
+ *                             active:
+ *                               type: number
+ *                               example: 1320
+ *                             newToday:
+ *                               type: number
+ *                               example: 12
+ *                         videos:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                               example: 3421
+ *                             today:
+ *                               type: number
+ *                               example: 45
+ *                         posts:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                               example: 2156
+ *                             scheduled:
+ *                               type: number
+ *                               example: 89
+ *                         media:
+ *                           type: object
+ *                           properties:
+ *                             images:
+ *                               type: number
+ *                             stickers:
+ *                               type: number
+ *                             gifs:
+ *                               type: number
+ *                             audio:
+ *                               type: number
+ *                             fonts:
+ *                               type: number
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -390,8 +447,53 @@ router.post(
  *     responses:
  *       200:
  *         description: Media retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     media:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         description:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         cloudinaryUrl:
+ *                           type: string
+ *                         cloudinaryPublicId:
+ *                           type: string
+ *                         cloudinaryFolder:
+ *                           type: string
+ *                         category:
+ *                           type: string
+ *                         tags:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                         isActive:
+ *                           type: boolean
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
  *       404:
  *         description: Media not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
   '/media/:id',
@@ -434,8 +536,30 @@ router.get(
  *     responses:
  *       200:
  *         description: Media updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Media updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     media:
+ *                       type: object
  *       404:
  *         description: Media not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.patch(
   '/media/:id',
@@ -461,8 +585,33 @@ router.patch(
  *     responses:
  *       200:
  *         description: Status toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Media status toggled successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     media:
+ *                       type: object
+ *                       properties:
+ *                         isActive:
+ *                           type: boolean
  *       404:
  *         description: Media not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.patch(
   '/media/:id/toggle-status',
@@ -488,8 +637,25 @@ router.patch(
  *     responses:
  *       200:
  *         description: Media deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Media deleted successfully from database and Cloudinary
  *       404:
  *         description: Media not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.delete(
   '/media/:id',
@@ -523,8 +689,34 @@ router.delete(
  *     responses:
  *       200:
  *         description: Media deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Successfully deleted 15 media items
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deleted:
+ *                       type: number
+ *                       example: 15
+ *                     failed:
+ *                       type: number
+ *                       example: 0
  *       400:
  *         description: No IDs provided
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.post(
   '/media/bulk-delete',
@@ -578,6 +770,51 @@ router.post(
  *     responses:
  *       200:
  *         description: Users retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                   example: 50
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     users:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           email:
+ *                             type: string
+ *                           loginType:
+ *                             type: string
+ *                           accountStatus:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         pages:
+ *                           type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
   '/users',
@@ -602,8 +839,52 @@ router.get(
  *     responses:
  *       200:
  *         description: User details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         loginType:
+ *                           type: string
+ *                         accountStatus:
+ *                           type: string
+ *                         profilePicture:
+ *                           type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         videosCount:
+ *                           type: number
+ *                         postsCount:
+ *                           type: number
+ *                         socialAccountsCount:
+ *                           type: number
  *       404:
  *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
   '/users/:id',
@@ -977,6 +1258,37 @@ router.delete(
  *     responses:
  *       200:
  *         description: Videos retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                   example: 100
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     videos:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Video'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         pages:
+ *                           type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/videos', checkPermission('videos'), adminController.getAllVideos);
 
@@ -997,8 +1309,25 @@ router.get('/videos', checkPermission('videos'), adminController.getAllVideos);
  *     responses:
  *       200:
  *         description: Video deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Video deleted successfully
  *       404:
  *         description: Video not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.delete(
   '/videos/:id',
@@ -1047,6 +1376,37 @@ router.delete(
  *     responses:
  *       200:
  *         description: Posts retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                   example: 75
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     posts:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Post'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         pages:
+ *                           type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/posts', checkPermission('posts'), adminController.getAllPosts);
 
@@ -1102,6 +1462,52 @@ router.delete(
  *     responses:
  *       200:
  *         description: Analytics overview retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     analytics:
+ *                       type: object
+ *                       properties:
+ *                         users:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                             active:
+ *                               type: number
+ *                             newThisPeriod:
+ *                               type: number
+ *                         videos:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                             uploaded:
+ *                               type: number
+ *                         posts:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: number
+ *                             published:
+ *                               type: number
+ *                         engagement:
+ *                           type: object
+ *                           properties:
+ *                             totalViews:
+ *                               type: number
+ *                             totalLikes:
+ *                               type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/analytics/overview', checkPermission('analytics'), adminController.getAnalyticsOverview);
 
@@ -1122,6 +1528,49 @@ router.get('/analytics/overview', checkPermission('analytics'), adminController.
  *     responses:
  *       200:
  *         description: User analytics retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     analytics:
+ *                       type: object
+ *                       properties:
+ *                         totalUsers:
+ *                           type: number
+ *                           example: 1542
+ *                         activeUsers:
+ *                           type: number
+ *                           example: 1320
+ *                         newUsers:
+ *                           type: number
+ *                           example: 45
+ *                         userGrowth:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               date:
+ *                                 type: string
+ *                               count:
+ *                                 type: number
+ *                         byLoginType:
+ *                           type: object
+ *                           properties:
+ *                             email:
+ *                               type: number
+ *                             google:
+ *                               type: number
+ *                             apple:
+ *                               type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/analytics/users', checkPermission('analytics'), adminController.getUserAnalytics);
 
@@ -1257,9 +1706,13 @@ router.get('/analytics/users', checkPermission('analytics'), adminController.get
  *                         apiKeys:
  *                           type: object
  *                           properties:
- *                             geminiApiKey:
+ *                             falApiKey:
  *                               type: string
  *                               description: Removed in public, masked in masked, full in full
+ *                             falModel:
+ *                               type: string
+ *                               example: fal-ai/flux/dev
+ *                               description: Fal.ai model configuration
  *                             bundleSocialApiKey:
  *                               type: string
  *                               description: Removed in public, masked in masked, full in full
@@ -1420,9 +1873,14 @@ router.get('/settings', restrictTo('superadmin'), adminController.getSettings);
  *               apiKeys:
  *                 type: object
  *                 properties:
- *                   geminiApiKey:
+ *                   falApiKey:
  *                     type: string
- *                     example: "AIzaxxxxxxxxxxxxxxxxxxxxxxxx"
+ *                     example: "fal_xxxxxxxxxxxx"
+ *                     description: "Fal.ai API key for AI-powered caption generation"
+ *                   falModel:
+ *                     type: string
+ *                     example: "fal-ai/flux/dev"
+ *                     description: "Fal.ai model to use (flux/dev, flux-pro, flux/schnell)"
  *                   bundleSocialApiKey:
  *                     type: string
  *                     example: "bundle_xxxxxxxxxxxx"
@@ -1603,6 +2061,66 @@ router.patch(
  *     responses:
  *       200:
  *         description: Activity logs retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                   example: 150
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     logs:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           admin:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                           action:
+ *                             type: string
+ *                             example: update
+ *                           resourceType:
+ *                             type: string
+ *                             example: user
+ *                           resourceId:
+ *                             type: string
+ *                           details:
+ *                             type: object
+ *                           ipAddress:
+ *                             type: string
+ *                           userAgent:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         pages:
+ *                           type: number
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/activity-logs', restrictTo('superadmin', 'admin'), adminController.getActivityLogs);
 
@@ -2053,10 +2571,62 @@ router.get(
  *     responses:
  *       200:
  *         description: Legal content retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                           enum: [privacy_policy, terms_of_use, faq]
+ *                         title:
+ *                           type: string
+ *                         content:
+ *                           type: string
+ *                         htmlContent:
+ *                           type: string
+ *                         version:
+ *                           type: number
+ *                         isPublished:
+ *                           type: boolean
+ *                         lastUpdatedBy:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             name:
+ *                               type: string
+ *                             email:
+ *                               type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
  *       404:
  *         description: Legal content not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/legal/:type',
@@ -2111,12 +2681,63 @@ router.get(
  *     responses:
  *       200:
  *         description: Legal content updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Legal content updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         version:
+ *                           type: number
+ *                         isPublished:
+ *                           type: boolean
  *       201:
  *         description: Legal content created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Legal content created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: object
  *       400:
  *         description: Missing required fields or invalid type
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/legal',
@@ -2166,10 +2787,48 @@ router.post(
  *     responses:
  *       200:
  *         description: Legal content updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Legal content updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         version:
+ *                           type: number
+ *                         isPublished:
+ *                           type: boolean
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
  *       404:
  *         description: Legal content not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.patch(
   '/legal/:type',
@@ -2200,10 +2859,41 @@ router.patch(
  *     responses:
  *       200:
  *         description: Publish status toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Legal content publish status updated
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     content:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         isPublished:
+ *                           type: boolean
  *       404:
  *         description: Legal content not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.patch(
   '/legal/:type/publish',
@@ -2234,12 +2924,37 @@ router.patch(
  *     responses:
  *       204:
  *         description: Legal content deleted successfully
+ *       200:
+ *         description: Legal content deleted successfully (alternative)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Legal content deleted successfully
  *       404:
  *         description: Legal content not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       403:
  *         description: Forbidden - Superadmin only
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.delete(
   '/legal/:type',
@@ -2372,10 +3087,64 @@ router.delete(
  *     responses:
  *       201:
  *         description: Notification sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Notification sent successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     notification:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         body:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         targetType:
+ *                           type: string
+ *                         status:
+ *                           type: string
+ *                           example: sent
+ *                         targetedUserCount:
+ *                           type: number
+ *                         successCount:
+ *                           type: number
+ *                         failureCount:
+ *                           type: number
+ *                         createdBy:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             name:
+ *                               type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
  *       400:
  *         description: Invalid input or no device tokens found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/notifications/send',
@@ -2429,8 +3198,70 @@ router.post(
  *     responses:
  *       200:
  *         description: Notifications retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 results:
+ *                   type: number
+ *                   example: 25
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     notifications:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           title:
+ *                             type: string
+ *                           body:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           targetType:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                           targetedUserCount:
+ *                             type: number
+ *                           successCount:
+ *                             type: number
+ *                           failureCount:
+ *                             type: number
+ *                           priority:
+ *                             type: string
+ *                           createdBy:
+ *                             type: object
+ *                             properties:
+ *                               name:
+ *                                 type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         pages:
+ *                           type: number
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/notifications',
@@ -2458,8 +3289,63 @@ router.get(
  *     responses:
  *       200:
  *         description: Statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         totalNotifications:
+ *                           type: number
+ *                           example: 150
+ *                         sentNotifications:
+ *                           type: number
+ *                           example: 120
+ *                         failedNotifications:
+ *                           type: number
+ *                           example: 5
+ *                         totalUsersReached:
+ *                           type: number
+ *                           example: 5420
+ *                         successRate:
+ *                           type: number
+ *                           example: 96.2
+ *                         byType:
+ *                           type: object
+ *                           properties:
+ *                             announcement:
+ *                               type: number
+ *                             promotion:
+ *                               type: number
+ *                             content_update:
+ *                               type: number
+ *                             account_alert:
+ *                               type: number
+ *                             custom:
+ *                               type: number
+ *                         recentActivity:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               date:
+ *                                 type: string
+ *                               count:
+ *                                 type: number
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/notifications/stats',
@@ -2493,10 +3379,40 @@ router.get(
  *     responses:
  *       200:
  *         description: Test notification sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Test notification sent successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     messageId:
+ *                       type: string
+ *                       example: projects/your-project/messages/1234567890
+ *                     token:
+ *                       type: string
+ *                       description: Device token (first 20 chars)
+ *                     success:
+ *                       type: boolean
  *       400:
  *         description: Failed to send test notification
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/notifications/test',
@@ -2518,10 +3434,48 @@ router.post(
  *     responses:
  *       200:
  *         description: Firebase service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Firebase service is healthy
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     firebaseInitialized:
+ *                       type: boolean
+ *                       example: true
+ *                     serviceAccountConfigured:
+ *                       type: boolean
+ *                       example: true
+ *                     projectId:
+ *                       type: string
+ *                       example: your-project-id
  *       503:
  *         description: Firebase service is unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: error
+ *                 message:
+ *                   type: string
+ *                   example: Firebase service is not configured or unavailable
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/notifications/firebase-health',
@@ -2571,10 +3525,43 @@ router.get(
  *     responses:
  *       200:
  *         description: Target user count retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     targetCount:
+ *                       type: number
+ *                       example: 1250
+ *                       description: Number of users matching criteria
+ *                     usersWithTokens:
+ *                       type: number
+ *                       example: 980
+ *                       description: Users with registered device tokens
+ *                     targetType:
+ *                       type: string
+ *                       example: segment
+ *                     criteria:
+ *                       type: object
+ *                       description: Applied filter criteria
  *       400:
  *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post(
   '/notifications/target-count',
@@ -2602,10 +3589,79 @@ router.post(
  *     responses:
  *       200:
  *         description: Notification retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     notification:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         body:
+ *                           type: string
+ *                         type:
+ *                           type: string
+ *                         targetType:
+ *                           type: string
+ *                         targetUserId:
+ *                           type: string
+ *                           nullable: true
+ *                         targetSegment:
+ *                           type: object
+ *                           nullable: true
+ *                         status:
+ *                           type: string
+ *                         targetedUserCount:
+ *                           type: number
+ *                         successCount:
+ *                           type: number
+ *                         failureCount:
+ *                           type: number
+ *                         data:
+ *                           type: object
+ *                         deepLink:
+ *                           type: string
+ *                         imageUrl:
+ *                           type: string
+ *                         priority:
+ *                           type: string
+ *                         createdBy:
+ *                           type: object
+ *                           properties:
+ *                             _id:
+ *                               type: string
+ *                             name:
+ *                               type: string
+ *                             email:
+ *                               type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
  *       404:
  *         description: Notification not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get(
   '/notifications/:id',

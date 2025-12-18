@@ -30,7 +30,7 @@ class ConfigService {
       // Fetch from database
       logger.debug('Fetching settings from database');
       const settings = await Settings.findById('app_settings')
-        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.perplexityApiKey +apiKeys.geminiApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password +firebase.serviceAccount +rapidApi.key');
+        .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.falApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password +firebase.serviceAccount +rapidApi.key');
 
       if (!settings) {
         logger.warn('No settings found in database, creating from environment variables');
@@ -100,8 +100,8 @@ class ConfigService {
         uploadPath: './uploads/videos'
       },
       apiKeys: {
-        perplexityApiKey: process.env.PERPLEXITY_API_KEY || '',
-        geminiApiKey: process.env.GEMINI_API_KEY || '',
+        falApiKey: process.env.FAL_API_KEY || '',
+        falModel: process.env.FAL_MODEL || 'fal-ai/flux/dev',
         bundleSocialApiKey: process.env.BUNDLE_SOCIAL_API_KEY || '',
         bundleSocialOrgId: process.env.BUNDLE_SOCIAL_ORG_ID || ''
       },

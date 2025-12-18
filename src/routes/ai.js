@@ -12,7 +12,7 @@ const router = express.Router();
  * @swagger
  * tags:
  *   name: AI
- *   description: AI-powered content generation and optimization using Perplexity AI
+ *   description: AI-powered content generation and optimization using Fal.ai
  */
 
 // All routes require authentication
@@ -23,7 +23,7 @@ router.use(protect);
  * /api/v1/ai/status:
  *   get:
  *     summary: Get AI service status and capabilities
- *     description: Check Perplexity AI service availability, supported platforms, tones, and capabilities
+ *     description: Check Fal.ai service availability, supported platforms, tones, and capabilities
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
@@ -52,28 +52,22 @@ router.use(protect);
  *                           example: true
  *                         provider:
  *                           type: string
- *                           example: Perplexity AI
+ *                           example: Fal.ai
  *                         model:
  *                           type: string
- *                           example: sonar
+ *                           example: fal-ai/flux/dev
  *                         models:
  *                           type: object
  *                           properties:
- *                             search:
+ *                             flux_dev:
  *                               type: string
- *                               example: sonar - Fast search model (default)
- *                             searchPro:
+ *                               example: fal-ai/flux/dev - Fast image and text generation (default)
+ *                             flux_pro:
  *                               type: string
- *                               example: sonar-pro - Advanced search
- *                             reasoning:
+ *                               example: fal-ai/flux-pro - Professional quality generation
+ *                             flux_schnell:
  *                               type: string
- *                               example: sonar-reasoning - Real-time reasoning
- *                             reasoningPro:
- *                               type: string
- *                               example: sonar-reasoning-pro - Precise reasoning with CoT
- *                             research:
- *                               type: string
- *                               example: sonar-deep-research - Exhaustive research
+ *                               example: fal-ai/flux/schnell - Ultra-fast generation
  *                         capabilities:
  *                           type: object
  *                           properties:
@@ -89,6 +83,7 @@ router.use(protect);
  *                               type: boolean
  *                             realTimeData:
  *                               type: boolean
+ *                               description: false for Fal.ai (generative AI service)
  *                         supportedPlatforms:
  *                           type: array
  *                           items:
@@ -110,7 +105,11 @@ router.use(protect);
  *                               example: 30
  *                             requestsPerMinute:
  *                               type: number
- *                               example: 5
+ *                               example: 10
+ *                         configSource:
+ *                           type: string
+ *                           enum: [database, environment]
+ *                           description: Source of API configuration
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -120,16 +119,47 @@ router.get('/status', aiController.getAIStatus);
  * @swagger
  * /api/v1/ai/health:
  *   get:
- *     summary: Check Perplexity API health
- *     description: Test connection to Perplexity API and verify API key is working
+ *     summary: Check Fal.ai API health
+ *     description: Test connection to Fal.ai API and verify API key is working
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: API is healthy
+ *         description: Fal.ai API is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Fal.ai API is healthy
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     healthy:
+ *                       type: boolean
+ *                     model:
+ *                       type: string
+ *                     response:
+ *                       type: string
  *       503:
- *         description: API is unavailable
+ *         description: Fal.ai API is unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: error
+ *                 message:
+ *                   type: string
+ *                   example: Fal.ai API is unavailable
  */
 router.get('/health', aiController.checkAIHealth);
 
@@ -137,7 +167,7 @@ router.get('/health', aiController.checkAIHealth);
  * @swagger
  * /api/v1/ai/generate-caption:
  *   post:
- *     summary: Generate AI-powered caption for video using Perplexity AI
+ *     summary: Generate AI-powered caption for video using Fal.ai
  *     description: |
  *       Automatically generates platform-optimized captions with intelligent prompt engineering.
  *       No manual prompt needed - the AI automatically applies platform-specific best practices,
@@ -147,11 +177,11 @@ router.get('/health', aiController.checkAIHealth);
  *       - Platform-specific optimization (Instagram, TikTok, YouTube, etc.)
  *       - 8 different tone options
  *       - Automatic hashtag generation with trending suggestions
- *       - Real-time web data access for better relevance
+ *       - AI-powered text generation using Fal.ai models
  *       - Smart emoji placement and formatting
- *       - Token usage tracking for cost monitoring
+ *       - Multiple model options (flux/dev, flux-pro, flux/schnell)
  *       
- *       **Rate Limit:** 5 requests per minute
+ *       **Rate Limit:** 10 requests per minute
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
@@ -213,18 +243,6 @@ router.get('/health', aiController.checkAIHealth);
  *                   enum: [instagram, tiktok, youtube, facebook, twitter, linkedin, pinterest]
  *                 description: Array of platforms for multi-platform optimization (optional)
  *                 example: ["instagram", "tiktok"]
- *               model:
- *                 type: string
- *                 enum: [sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro, sonar-deep-research]
- *                 default: sonar
- *                 description: |
- *                   Perplexity AI model to use (optional):
- *                   - **sonar**: Fast search model (default, most cost-effective)
- *                   - **sonar-pro**: Advanced search with complex queries
- *                   - **sonar-reasoning**: Real-time reasoning with search
- *                   - **sonar-reasoning-pro**: Precise reasoning with Chain of Thought
- *                   - **sonar-deep-research**: Exhaustive research and comprehensive reports
- *                 example: sonar
  *           examples:
  *             instagram_casual:
  *               summary: Instagram - Casual tone
@@ -281,20 +299,8 @@ router.get('/health', aiController.checkAIHealth);
  *                       example: instagram
  *                     model:
  *                       type: string
- *                       example: sonar
- *                     usage:
- *                       type: object
- *                       description: Token usage metrics
- *                       properties:
- *                         promptTokens:
- *                           type: number
- *                           example: 236
- *                         completionTokens:
- *                           type: number
- *                           example: 268
- *                         totalTokens:
- *                           type: number
- *                           example: 504
+ *                       example: fal-ai/flux/dev
+ *                       description: Fal.ai model used for generation
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -317,7 +323,7 @@ router.get('/health', aiController.checkAIHealth);
  *                   example: error
  *                 message:
  *                   type: string
- *                   example: Perplexity API rate limit exceeded. Please try again in a few moments.
+ *                   example: Fal.ai API rate limit exceeded. Please try again in a few moments.
  *       500:
  *         description: AI service error
  *         content:
@@ -342,11 +348,11 @@ router.post('/generate-caption', aiRateLimiter, validate(generateCaptionSchema),
  *   post:
  *     summary: Generate trending hashtags for content
  *     description: |
- *       Generate strategic, platform-specific hashtags using Perplexity AI.
+ *       Generate strategic, platform-specific hashtags using Fal.ai.
  *       Automatically selects a mix of high-volume, niche, and trending hashtags
  *       optimized for the target platform's algorithm.
  *       
- *       **Rate Limit:** 5 requests per minute
+ *       **Rate Limit:** 10 requests per minute
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
@@ -423,11 +429,11 @@ router.post('/hashtags', aiRateLimiter, validate(generateHashtagsSchema), aiCont
  *   post:
  *     summary: Optimize caption for specific platform
  *     description: |
- *       Optimize an existing caption for a specific platform using Perplexity AI.
+ *       Optimize an existing caption for a specific platform using Fal.ai.
  *       Adapts formatting, length, style, and engagement elements to match
  *       platform-specific best practices and algorithm preferences.
  *       
- *       **Rate Limit:** 5 requests per minute
+ *       **Rate Limit:** 10 requests per minute
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
@@ -497,7 +503,7 @@ router.post('/optimize', aiRateLimiter, validate(optimizeCaptionSchema), aiContr
  *     description: |
  *       Get optimized caption suggestions for all major social media platforms
  *       in a single request. Each platform receives a caption optimized for
- *       its unique format, audience, and algorithm using Perplexity AI.
+ *       its unique format, audience, and algorithm using Fal.ai.
  *     tags: [AI]
  *     security:
  *       - bearerAuth: []
@@ -571,7 +577,7 @@ router.post('/optimize', aiRateLimiter, validate(optimizeCaptionSchema), aiContr
  *                                 type: string
  *                     model:
  *                       type: string
- *                       example: sonar
+ *                       example: fal-ai/flux/dev
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -583,6 +589,90 @@ router.post('/optimize', aiRateLimiter, validate(optimizeCaptionSchema), aiContr
 // Video suggestions
 router.get('/suggestions/:videoId', aiController.getVideoSuggestions);
 
+/**
+ * @swagger
+ * /api/v1/ai/analyze:
+ *   post:
+ *     summary: Analyze content performance (Mock)
+ *     description: |
+ *       Analyze content for performance predictions and optimization suggestions.
+ *       This is a mock implementation for MVP - provides simulated analytics.
+ *     tags: [AI]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 2200
+ *                 description: The content to analyze
+ *                 example: "Check out my new video about cooking pasta! Who else loves Italian food?"
+ *               platform:
+ *                 type: string
+ *                 enum: [instagram, tiktok, youtube, facebook, twitter, linkedin, general]
+ *                 default: general
+ *                 description: Target platform for analysis
+ *     responses:
+ *       200:
+ *         description: Content analyzed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Content analysis completed
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     analysis:
+ *                       type: object
+ *                       properties:
+ *                         score:
+ *                           type: number
+ *                           example: 85
+ *                           description: Overall content score (60-100)
+ *                         suggestions:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                           example: ["Consider adding more engaging questions", "Include trending hashtags"]
+ *                         sentiment:
+ *                           type: string
+ *                           example: positive
+ *                         readabilityScore:
+ *                           type: number
+ *                           example: 85
+ *                         estimatedReach:
+ *                           type: number
+ *                           example: 2500
+ *                         keyTopics:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                           example: ["video", "content", "social media"]
+ *                         platform:
+ *                           type: string
+ *                     content:
+ *                       type: string
+ *                       description: Truncated content preview
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 // Content analysis
 const analyzeContentSchema = Joi.object({
   content: Joi.string().min(1).max(2200).required(),

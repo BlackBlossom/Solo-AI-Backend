@@ -308,7 +308,7 @@ const generateAICaption = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
-    const geminiService = require('../services/geminiService');
+    const falAiService = require('../services/falAiService');
     
     const options = {
       prompt: req.body.prompt,
@@ -318,14 +318,14 @@ const generateAICaption = async (req, res, next) => {
       platform: req.body.platform || 'general'
     };
 
-    const aiCaption = await geminiService.generateCaption(video, options);
+    const aiCaption = await falAiService.generateCaption(video, options);
 
     // Update video with AI generated content
     video.aiGeneratedCaption = aiCaption.caption;
     video.aiGeneratedHashtags = aiCaption.hashtags;
     await video.save();
 
-    logger.info('AI caption generated with Gemini:', { videoId: video._id, userId: req.user.id });
+    logger.info('AI caption generated with Fal.ai:', { videoId: video._id, userId: req.user.id });
 
     sendSuccess(res, 'AI caption generated successfully', {
       caption: aiCaption.caption,

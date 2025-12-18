@@ -1353,9 +1353,16 @@ const updateSettings = async (req, res, next) => {
 
     if (apiKeys) {
       updates.apiKeys = {};
-      if (apiKeys.geminiApiKey !== undefined) updates.apiKeys.geminiApiKey = apiKeys.geminiApiKey;
+      if (apiKeys.falApiKey !== undefined) updates.apiKeys.falApiKey = apiKeys.falApiKey;
+      if (apiKeys.falModel !== undefined) updates.apiKeys.falModel = apiKeys.falModel;
       if (apiKeys.bundleSocialApiKey !== undefined) updates.apiKeys.bundleSocialApiKey = apiKeys.bundleSocialApiKey;
       if (apiKeys.bundleSocialOrgId !== undefined) updates.apiKeys.bundleSocialOrgId = apiKeys.bundleSocialOrgId;
+    }
+
+    if (req.body.rapidApi) {
+      updates.rapidApi = {};
+      if (req.body.rapidApi.key !== undefined) updates.rapidApi.key = req.body.rapidApi.key;
+      if (req.body.rapidApi.enabled !== undefined) updates.rapidApi.enabled = req.body.rapidApi.enabled;
     }
 
     if (urls) {
