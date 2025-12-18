@@ -1,5 +1,5 @@
 const Video = require('../models/Video');
-const perplexityService = require('../services/perplexityService');
+const falAiService = require('../services/falAiService');
 const configService = require('../services/configService');
 const { 
   sendSuccess, 
@@ -36,8 +36,8 @@ const generateCaption = async (req, res, next) => {
       platforms: platforms || []
     };
 
-    // Generate AI caption using Perplexity
-    const result = await perplexityService.generateCaption(video, options);
+    // Generate AI caption using Fal.ai
+    const result = await falAiService.generateCaption(video, options);
 
     // Update video with generated content
     video.aiGeneratedCaption = result.caption;
@@ -80,7 +80,7 @@ const generateHashtags = async (req, res, next) => {
       platform: platform || 'instagram'
     };
 
-    const hashtags = await perplexityService.generateHashtags(content, options);
+    const hashtags = await falAiService.generateHashtags(content, options);
 
     logger.info('AI hashtags generated:', { 
       userId: req.user.id,
@@ -113,8 +113,8 @@ const optimizeCaption = async (req, res, next) => {
       return sendBadRequest(res, 'Platform is required for optimization');
     }
 
-    // Use Perplexity to optimize caption for platform
-    const optimizedCaption = await perplexityService.optimizeForPlatform(caption, platform);
+    // Use Fal.ai to optimize caption for platform
+    const optimizedCaption = await falAiService.optimizeForPlatform(caption, platform);
 
     logger.info('Caption optimized for platform:', { 
       userId: req.user.id,
@@ -153,7 +153,7 @@ const getVideoSuggestions = async (req, res, next) => {
     // Generate suggestions for multiple platforms
     const platforms = ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin'];
     
-    const suggestions = await perplexityService.generateMultiPlatformSuggestions(
+    const suggestions = await falAiService.generateMultiPlatformSuggestions(
       video,
       platforms,
       tone || 'casual'
@@ -225,18 +225,17 @@ const getAIStatus = async (req, res, next) => {
   try {
     // Get API key from database settings first
     const apiKeys = await configService.getApiKeys();
-    const perplexityKey = apiKeys.perplexityApiKey || process.env.PERPLEXITY_API_KEY;
+    const falApiKey = apiKeys.falApiKey || process.env.FAL_API_KEY;
+    const falModel = apiKeys.falModel || process.env.FAL_MODEL || 'fal-ai/flux/dev';
     
     const status = {
-      available: !!perplexityKey,
-      provider: 'Perplexity AI',
-      model: 'sonar',
+      available: !!falApiKey,
+      provider: 'Fal.ai',
+      model: falModel,
       models: {
-        search: 'sonar - Fast search model (default)',
-        searchPro: 'sonar-pro - Advanced search',
-        reasoning: 'sonar-reasoning - Real-time reasoning',
-        reasoningPro: 'sonar-reasoning-pro - Precise reasoning with CoT',
-        research: 'sonar-deep-research - Exhaustive research'
+        flux_dev: 'fal-ai/flux/dev - Fast image and text generation (default)',
+        flux_pro: 'fal-ai/flux-pro - Professional quality generation',
+        flux_schnell: 'fal-ai/flux/schnell - Ultra-fast generation'
       },
       capabilities: {
         captionGeneration: true,
@@ -244,16 +243,16 @@ const getAIStatus = async (req, res, next) => {
         platformOptimization: true,
         contentAnalysis: true,
         multiPlatformSuggestions: true,
-        realTimeData: true // Perplexity has access to real-time web data
+        realTimeData: false // Fal.ai is a generative AI service
       },
       supportedPlatforms: ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin', 'pinterest'],
       supportedTones: ['professional', 'casual', 'funny', 'inspirational', 'educational', 'storytelling', 'urgent', 'luxury'],
       limits: {
         maxCaptionLength: 5000,
         maxHashtags: 30,
-        requestsPerMinute: 5 // Rate limited
+        requestsPerMinute: 10 // Fal.ai rate limits
       },
-      configSource: apiKeys.perplexityApiKey ? 'database' : 'environment'
+      configSource: apiKeys.falApiKey ? 'database' : 'environment'
     };
 
     sendSuccess(res, 'AI service status retrieved', { status });
@@ -266,14 +265,14 @@ const getAIStatus = async (req, res, next) => {
 // Check Perplexity API health
 const checkAIHealth = async (req, res, next) => {
   try {
-    const health = await perplexityService.checkAPIHealth();
+    const health = await falAiService.checkAPIHealth();
     
     if (health.healthy) {
-      sendSuccess(res, 'Perplexity API is healthy', health);
+      sendSuccess(res, 'Fal.ai API is healthy', health);
     } else {
       res.status(503).json({
         status: 'error',
-        message: 'Perplexity API is unavailable',
+        message: 'Fal.ai API is unavailable',
         data: health
       });
     }

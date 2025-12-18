@@ -126,15 +126,14 @@ const settingsSchema = new mongoose.Schema({
 
   // API Keys
   apiKeys: {
-    perplexityApiKey: {
+    falApiKey: {
       type: String,
       select: false, // Don't return by default for security
-      default: process.env.PERPLEXITY_API_KEY || ''
+      default: process.env.FAL_API_KEY || ''
     },
-    geminiApiKey: {
+    falModel: {
       type: String,
-      select: false, // Don't return by default for security
-      default: process.env.GEMINI_API_KEY || ''
+      default: process.env.FAL_MODEL || 'fal-ai/flux/dev'
     },
     bundleSocialApiKey: {
       type: String,
@@ -304,14 +303,16 @@ settingsSchema.methods.toPublicJSON = function() {
     }
   }
   if (obj.apiKeys) {
-    delete obj.apiKeys.perplexityApiKey;
-    delete obj.apiKeys.geminiApiKey;
+    delete obj.apiKeys.falApiKey;
     delete obj.apiKeys.bundleSocialApiKey;
   }
   if (obj.reddit) {
     delete obj.reddit.clientId;
     delete obj.reddit.clientSecret;
     delete obj.reddit.password;
+  }
+  if (obj.rapidApi) {
+    delete obj.rapidApi.key;
   }
   
   return obj;
@@ -338,13 +339,9 @@ settingsSchema.methods.toMaskedJSON = function() {
     obj.email.smtp = obj.email.smtp || {};
     obj.email.smtp.pass = this.maskSecret(this.email.smtp.pass);
   }
-  if (this.apiKeys?.perplexityApiKey) {
+  if (this.apiKeys?.falApiKey) {
     obj.apiKeys = obj.apiKeys || {};
-    obj.apiKeys.perplexityApiKey = this.maskSecret(this.apiKeys.perplexityApiKey);
-  }
-  if (this.apiKeys?.geminiApiKey) {
-    obj.apiKeys = obj.apiKeys || {};
-    obj.apiKeys.geminiApiKey = this.maskSecret(this.apiKeys.geminiApiKey);
+    obj.apiKeys.falApiKey = this.maskSecret(this.apiKeys.falApiKey);
   }
   if (this.apiKeys?.bundleSocialApiKey) {
     obj.apiKeys = obj.apiKeys || {};
@@ -361,6 +358,10 @@ settingsSchema.methods.toMaskedJSON = function() {
   if (this.reddit?.password) {
     obj.reddit = obj.reddit || {};
     obj.reddit.password = this.maskSecret(this.reddit.password);
+  }
+  if (this.rapidApi?.key) {
+    obj.rapidApi = obj.rapidApi || {};
+    obj.rapidApi.key = this.maskSecret(this.rapidApi.key);
   }
   
   return obj;
@@ -398,14 +399,9 @@ settingsSchema.methods.toFullJSON = function() {
     obj.email.smtp.pass = this.email.smtp.pass;
   }
   
-  if (this.apiKeys?.perplexityApiKey !== undefined) {
+  if (this.apiKeys?.falApiKey !== undefined) {
     obj.apiKeys = obj.apiKeys || {};
-    obj.apiKeys.perplexityApiKey = this.apiKeys.perplexityApiKey;
-  }
-  
-  if (this.apiKeys?.geminiApiKey !== undefined) {
-    obj.apiKeys = obj.apiKeys || {};
-    obj.apiKeys.geminiApiKey = this.apiKeys.geminiApiKey;
+    obj.apiKeys.falApiKey = this.apiKeys.falApiKey;
   }
   
   if (this.apiKeys?.bundleSocialApiKey !== undefined) {
@@ -426,6 +422,11 @@ settingsSchema.methods.toFullJSON = function() {
   if (this.reddit?.password !== undefined) {
     obj.reddit = obj.reddit || {};
     obj.reddit.password = this.reddit.password;
+  }
+  
+  if (this.rapidApi?.key !== undefined) {
+    obj.rapidApi = obj.rapidApi || {};
+    obj.rapidApi.key = this.rapidApi.key;
   }
   
   // Return everything including sensitive fields
@@ -449,13 +450,13 @@ settingsSchema.statics.getSettings = async function() {
     .select('+mongodb.uri')
     .select('+email.resend.apiKey')
     .select('+email.smtp.pass')
-    .select('+apiKeys.perplexityApiKey')
-    .select('+apiKeys.geminiApiKey')
+    .select('+apiKeys.falApiKey')
     .select('+apiKeys.bundleSocialApiKey')
     .select('+reddit.clientId')
     .select('+reddit.clientSecret')
     .select('+reddit.password')
-    .select('+firebase.serviceAccount');
+    .select('+firebase.serviceAccount')
+    .select('+rapidApi.key');
   
   if (!settings) {
     // Create default settings from environment variables
@@ -469,13 +470,13 @@ settingsSchema.statics.getSettings = async function() {
       .select('+mongodb.uri')
       .select('+email.resend.apiKey')
       .select('+email.smtp.pass')
-      .select('+apiKeys.perplexityApiKey')
-      .select('+apiKeys.geminiApiKey')
+      .select('+apiKeys.falApiKey')
       .select('+apiKeys.bundleSocialApiKey')
       .select('+reddit.clientId')
       .select('+reddit.clientSecret')
       .select('+reddit.password')
-      .select('+firebase.serviceAccount');
+      .select('+firebase.serviceAccount')
+      .select('+rapidApi.key');
   }
   
   return settings;
@@ -527,12 +528,8 @@ settingsSchema.pre('save', function(next) {
     errors.push('SMTP Password contains invalid bullet characters (•)');
   }
 
-  if (this.apiKeys?.perplexityApiKey && bulletRegex.test(this.apiKeys.perplexityApiKey)) {
-    errors.push('Perplexity API Key contains invalid bullet characters (•)');
-  }
-
-  if (this.apiKeys?.geminiApiKey && bulletRegex.test(this.apiKeys.geminiApiKey)) {
-    errors.push('Gemini API Key contains invalid bullet characters (•)');
+  if (this.apiKeys?.falApiKey && bulletRegex.test(this.apiKeys.falApiKey)) {
+    errors.push('Fal.ai API Key contains invalid bullet characters (•)');
   }
 
   if (this.apiKeys?.bundleSocialApiKey && bulletRegex.test(this.apiKeys.bundleSocialApiKey)) {
@@ -549,6 +546,10 @@ settingsSchema.pre('save', function(next) {
 
   if (this.reddit?.password && bulletRegex.test(this.reddit.password)) {
     errors.push('Reddit Password contains invalid bullet characters (•)');
+  }
+
+  if (this.rapidApi?.key && bulletRegex.test(this.rapidApi.key)) {
+    errors.push('RapidAPI Key contains invalid bullet characters (•)');
   }
 
   if (errors.length > 0) {

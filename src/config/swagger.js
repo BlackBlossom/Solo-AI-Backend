@@ -18,7 +18,7 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
 - **👤 Enhanced User Profiles** - Comprehensive personal information management
 - **🔄 Refresh Token System** - Persistent sessions without frequent re-login
 - **📹 Video Management** - Upload, process, and manage video content
-- **🤖 AI Content Generation** - OpenAI-powered captions and hashtags
+- **🤖 AI Content Generation** - Fal.ai-powered captions and hashtags
 - **📱 Social Media Integration** - Connect Instagram, Twitter, Facebook, LinkedIn, TikTok, YouTube
 - **📊 Analytics & Insights** - Real-time performance tracking
 - **⏰ Post Scheduling** - Schedule content across multiple platforms
@@ -49,7 +49,7 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
 ## 🔗 Useful Links
 
 - [Bundle.social Documentation](https://docs.bundle.social)
-- [OpenAI API Reference](https://platform.openai.com/docs)  
+- [Fal.ai Documentation](https://fal.ai/docs)  
 - [Project Repository](https://github.com/your-username/video-editing-backend)
       `,
       termsOfService: 'https://your-domain.com/terms',
