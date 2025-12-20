@@ -162,49 +162,30 @@ router.use(protectAdmin);
  *                     stats:
  *                       type: object
  *                       properties:
- *                         users:
- *                           type: object
- *                           properties:
- *                             total:
- *                               type: number
- *                               example: 1542
- *                             active:
- *                               type: number
- *                               example: 1320
- *                             newToday:
- *                               type: number
- *                               example: 12
- *                         videos:
- *                           type: object
- *                           properties:
- *                             total:
- *                               type: number
- *                               example: 3421
- *                             today:
- *                               type: number
- *                               example: 45
- *                         posts:
- *                           type: object
- *                           properties:
- *                             total:
- *                               type: number
- *                               example: 2156
- *                             scheduled:
- *                               type: number
- *                               example: 89
- *                         media:
- *                           type: object
- *                           properties:
- *                             images:
- *                               type: number
- *                             stickers:
- *                               type: number
- *                             gifs:
- *                               type: number
- *                             audio:
- *                               type: number
- *                             fonts:
- *                               type: number
+ *                         totalUsers:
+ *                           type: number
+ *                           example: 1542
+ *                         totalVideos:
+ *                           type: number
+ *                           example: 3421
+ *                         totalPosts:
+ *                           type: number
+ *                           example: 2156
+ *                         totalMedia:
+ *                           type: number
+ *                           example: 8934
+ *                         totalSocialAccounts:
+ *                           type: number
+ *                           example: 567
+ *                         totalAdmins:
+ *                           type: number
+ *                           example: 5
+ *                         totalNotificationsSent:
+ *                           type: number
+ *                           example: 1250
+ *                         newUsersThisMonth:
+ *                           type: number
+ *                           example: 145
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -1320,6 +1301,17 @@ router.get('/videos', checkPermission('videos'), adminController.getAllVideos);
  *                 message:
  *                   type: string
  *                   example: Video deleted successfully
+ *     description: |
+ *       Permanently deletes a video from both the database and Bundle.social.
+ *       
+ *       **What gets deleted:**
+ *       - Video record from database
+ *       - Video upload from Bundle.social (if bundleUploadId exists)
+ *       - Video ID from user's videos array
+ *       
+ *       If Bundle.social deletion fails, the database deletion will still proceed.
+ *       
+ *       **Requires**: Superadmin or Admin role with 'videos' permission
  *       404:
  *         description: Video not found
  *         content:
@@ -1427,8 +1419,36 @@ router.get('/posts', checkPermission('posts'), adminController.getAllPosts);
  *     responses:
  *       200:
  *         description: Post deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Post deleted successfully
+ *     description: |
+ *       Permanently deletes a post from both the database and Bundle.social.
+ *       
+ *       **What gets deleted:**
+ *       - Post record from database
+ *       - Post from Bundle.social (if bundlePostId exists)
+ *       - Post ID from user's posts array
+ *       
+ *       If Bundle.social deletion fails, the database deletion will still proceed.
+ *       
+ *       **Requires**: Superadmin or Admin role with 'posts' permission
  *       404:
  *         description: Post not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.delete(
   '/posts/:id',

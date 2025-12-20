@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #374151;
+            font-weight: 600;
+        }
+        
+        input[type="text"],
+        input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        input[type="text"]:focus,
+        input[type="file"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .button-group button {
+            flex: 1;
+        }
+        
+        .delete-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        
+        .delete-btn:hover:not(:disabled) {
+            box-shadow: 0 10px 20px rgba(239, 68, 68, 0.4);
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            color: #065f46;
+        }
+        
+        .result.error {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+        }
+        
+        .image-preview {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .image-preview img {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .url-display {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #374151;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ Image Upload Test</h1>
+        <p class="subtitle">Test the image upload API endpoint (Admin Only)</p>
+        
+        <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <strong>⚠️ Important:</strong> You must use an admin token from <code>/api/v1/admin/login</code>, not the regular user login endpoint.
+        </div>
+        
+        <div class="form-group">
+            <label for="apiUrl">API Base URL</label>
+            <input type="text" id="apiUrl" value="http://localhost:5000/api/v1" placeholder="API Base URL">
+        </div>
+        
+        <div class="form-group">
+            <label for="token">Admin Bearer Token (Required) ⚠️</label>
+            <input type="text" id="token" placeholder="Paste your admin JWT token here (from /api/v1/admin/login)">
+        </div>
+        
+        <div class="form-group">
+            <label for="imageFile">Select Image</label>
+            <input type="file" id="imageFile" accept="image/*">
+        </div>
+        
+        <div class="button-group">
+            <button id="uploadBtn" onclick="uploadImage()">Upload Image</button>
+            <button id="deleteBtn" class="delete-btn" onclick="deleteImage()" style="display: none;">Delete Image</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #6b7280;">Uploading...</p>
+        </div>
+        
+        <div class="result" id="result"></div>
+        
+        <div class="image-preview" id="imagePreview">
+            <h3 style="margin-bottom: 10px; color: #1f2937;">Uploaded Image:</h3>
+            <img id="uploadedImage" src="" alt="Uploaded">
+            <div class="url-display" id="imageUrl"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentFilename = null;
+
+        async function uploadImage() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const fileInput = document.getElementById('imageFile');
+            const resultDiv = document.getElementById('result');
+            const loading = document.getElementById('loading');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+            const imagePreview = document.getElementById('imagePreview');
+
+            // Validation
+            if (!token) {
+                showResult('error', 'Please enter an admin bearer token');
+                return;
+            }
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showResult('error', 'Please select an image file');
+                return;
+            }
+
+            const file = fileInput.files[0];
+
+            // Check file type
+            if (!file.type.startsWith('image/')) {
+                showResult('error', 'Please select a valid image file');
+                return;
+            }
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('image', file);
+
+            // Show loading
+            loading.style.display = 'block';
+            uploadBtn.disabled = true;
+            resultDiv.style.display = 'none';
+            imagePreview.style.display = 'none';
+
+            try {
+                const response = await fetch(`${apiUrl}/images/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Upload failed');
+                }
+
+                // Success
+                currentFilename = data.data.filename;
+                document.getElementById('uploadedImage').src = data.data.url;
+                document.getElementById('imageUrl').textContent = data.data.url;
+                
+                showResult('success', `✅ Image uploaded successfully!\nFilename: ${data.data.filename}\nSize: ${(data.data.size / 1024).toFixed(2)} KB`);
+                imagePreview.style.display = 'block';
+                deleteBtn.style.display = 'block';
+
+            } catch (error) {
+                showResult('error', `❌ Upload failed: ${error.message}`);
+                deleteBtn.style.display = 'none';
+            } finally {
+                loading.style.display = 'none';
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function deleteImage() {
+            if (!currentFilename) {
+                showResult('error', 'No image to delete');
+                return;
+            }
+
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const deleteBtn = document.getElementById('deleteBtn');
+            const resultDiv = document.getElementById('result');
+
+            if (!confirm('Are you sure you want to delete this image?')) {
+                return;
+            }
+
+            deleteBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${apiUrl}/images/${currentFilename}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Delete failed');
+                }
+
+                // Success
+                showResult('success', '✅ Image deleted successfully!');
+                document.getElementById('imagePreview').style.display = 'none';
+                document.getElementById('imageFile').value = '';
+                currentFilename = null;
+                deleteBtn.style.display = 'none';
+
+            } catch (error) {
+                showResult('error', `❌ Delete failed: ${error.message}`);
+            } finally {
+                deleteBtn.disabled = false;
+            }
+        }
+
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+
+        // Allow Enter key to trigger upload
+        document.getElementById('token').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                uploadImage();
+            }
+        });
+    </script>
+</body>
+</html>
