@@ -25,6 +25,7 @@ const legalRoutes = require('./routes/legal');
 const configRoutes = require('./routes/config');
 const inspirationRoutes = require('./routes/inspiration');
 const notificationRoutes = require('./routes/notifications');
+const imageRoutes = require('./routes/images');
 
 // Create Express app
 const app = express();
@@ -32,9 +33,35 @@ const app = express();
 // Trust proxy
 app.set('trust proxy', 1);
 
+// CORS Configuration - Allow requests from admin panel
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://localhost:4173',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all origins in development
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // Global Middleware
-app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Security headers with CORS support
+app.use(cors(corsOptions)); // Enable CORS with config
 
 // Logging
 if (process.env.NODE_ENV === 'development') {
@@ -240,6 +267,7 @@ app.use('/api/v1/legal', legalRoutes);
 app.use('/api/v1/config', configRoutes);
 app.use('/api/v1/inspiration', inspirationRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/images', imageRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

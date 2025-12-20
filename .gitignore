@@ -20,8 +20,10 @@ pids/
 # Uploads (for MVP - in production use cloud storage)
 uploads/videos/*
 uploads/thumbnails/*
+uploads/images/*
 !uploads/videos/.gitkeep
 !uploads/thumbnails/.gitkeep
+!uploads/images/.gitkeep
 
 # Coverage directory used by tools like istanbul
 coverage/

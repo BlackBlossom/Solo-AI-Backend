@@ -375,6 +375,17 @@ router.get('/user/:id', videoController.getUserVideos);
  *         $ref: '#/components/responses/NotFoundError'
  *   delete:
  *     summary: Delete video
+ *     description: |
+ *       Permanently deletes a video from both the database and Bundle.social.
+ *       This action also removes the video from the user's videos array.
+ *       
+ *       **What gets deleted:**
+ *       - Video record from database
+ *       - Video upload from Bundle.social (if bundleUploadId exists)
+ *       - Local file (only for legacy videos with local storage)
+ *       - Video ID from user's videos array
+ *       
+ *       If Bundle.social deletion fails, the database deletion will still proceed.
  *     tags: [Videos]
  *     parameters:
  *       - in: path
@@ -385,11 +396,18 @@ router.get('/user/:id', videoController.getUserVideos);
  *         description: Video ID
  *     responses:
  *       200:
- *         description: Video deleted successfully
+ *         description: Video deleted successfully from database and Bundle.social
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Success'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Video deleted successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:

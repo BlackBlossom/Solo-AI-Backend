@@ -8,6 +8,7 @@ const Post = require('../models/Post');
 const SocialAccount = require('../models/SocialAccount');
 const AdminActivityLog = require('../models/AdminActivityLog');
 const Settings = require('../models/Settings');
+const Notification = require('../models/Notification');
 const cloudinaryService = require('../services/cloudinaryService');
 const { 
   sendSuccess, 
@@ -194,6 +195,8 @@ const getDashboardStats = async (req, res, next) => {
       totalPosts,
       totalMedia,
       totalSocialAccounts,
+      totalAdmins,
+      totalNotificationsSent,
       recentUsers,
       recentVideos,
       recentPosts
@@ -203,6 +206,8 @@ const getDashboardStats = async (req, res, next) => {
       Post.countDocuments(),
       Media.countDocuments(),
       SocialAccount.countDocuments(),
+      AdminUser.countDocuments(),
+      Notification.countDocuments({ status: 'sent' }),
       User.find().sort({ createdAt: -1 }).limit(5).select('name email createdAt loginType'),
       Video.find().sort({ createdAt: -1 }).limit(5).populate('user', 'name email'),
       Post.find().sort({ createdAt: -1 }).limit(5).populate('user', 'name email').populate('video', 'thumbnailUrl')
@@ -250,6 +255,8 @@ const getDashboardStats = async (req, res, next) => {
         totalPosts,
         totalMedia,
         totalSocialAccounts,
+        totalAdmins,
+        totalNotificationsSent,
         newUsersThisMonth
       },
       recent: {
@@ -1003,6 +1010,26 @@ const deleteVideo = async (req, res, next) => {
       return sendNotFound(res, 'Video not found');
     }
 
+    // Delete from Bundle.social if uploaded there
+    if (video.bundleUploadId) {
+      try {
+        const bundleSocialService = require('../services/bundleSocialService');
+        await bundleSocialService.deleteUpload(video.bundleUploadId);
+        logger.info('Video deleted from Bundle.social:', { 
+          bundleUploadId: video.bundleUploadId,
+          adminId: req.admin._id 
+        });
+      } catch (bundleError) {
+        logger.warn('Failed to delete video from Bundle.social:', {
+          error: bundleError.message,
+          bundleUploadId: video.bundleUploadId,
+          adminId: req.admin._id
+        });
+        // Don't continue with database deletion even if Bundle.social deletion fails
+        return sendError(res, `Failed to delete video from Bundle.social. ${bundleError.message ? 'Error : ' + bundleError.message : ''}`);
+      }
+    }
+
     // Remove video ID from user's videos array
     const User = require('../models/User');
     await User.findByIdAndUpdate(
@@ -1084,6 +1111,26 @@ const deletePost = async (req, res, next) => {
 
     if (!post) {
       return sendNotFound(res, 'Post not found');
+    }
+
+    // Delete from Bundle.social if exists
+    if (post.bundlePostId) {
+      try {
+        const bundleSocialService = require('../services/bundleSocialService');
+        await bundleSocialService.deletePost(post.bundlePostId);
+        logger.info('Post deleted from Bundle.social:', { 
+          bundlePostId: post.bundlePostId,
+          adminId: req.admin._id 
+        });
+      } catch (bundleError) {
+        logger.warn('Failed to delete post from Bundle.social:', {
+          error: bundleError.message,
+          bundlePostId: post.bundlePostId,
+          adminId: req.admin._id
+        });
+        // Don't continue with database deletion even if Bundle.social deletion fails
+        return sendError(res, `Failed to delete post from Bundle.social. ${bundleError.message ? 'Error : ' + bundleError.message : ''}`);
+      }
     }
 
     // Remove post ID from user's posts array
