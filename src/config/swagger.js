@@ -69,6 +69,10 @@ A powerful, modern REST API built with **Node.js**, **Express**, and **MongoDB**
         description: '🚀 Production Server'
       }] : []),
       {
+        url: 'https://apidocs.soloaiapp.com',
+        description: 'Default Production Server'
+      },
+      {
         url: `http://localhost:${process.env.PORT || 5000}`,
         description: '💻 Development Server'
       }

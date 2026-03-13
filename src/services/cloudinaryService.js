@@ -7,25 +7,31 @@ let cloudinaryConfigured = false;
 
 /**
  * Initialize or reconfigure Cloudinary with settings from database
+ * Database credentials have PRIORITY over environment variables
  */
 const initializeCloudinary = async () => {
   try {
     const cloudinaryConfig = await configService.getCloudinaryConfig();
     
-    if (!cloudinaryConfig.cloudName || !cloudinaryConfig.apiKey || !cloudinaryConfig.apiSecret) {
-      logger.warn('Cloudinary configuration incomplete. Using environment variables as fallback.');
-      cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key: process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET
-      });
+    // DB credentials take priority, fall back to env vars if DB values are empty
+    const cloudName = cloudinaryConfig.cloudName || process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = cloudinaryConfig.apiKey || process.env.CLOUDINARY_API_KEY;
+    const apiSecret = cloudinaryConfig.apiSecret || process.env.CLOUDINARY_API_SECRET;
+    
+    if (!cloudName || !apiKey || !apiSecret) {
+      logger.warn('Cloudinary configuration incomplete - missing required credentials');
+    }
+    
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret
+    });
+    
+    if (cloudinaryConfig.cloudName && cloudinaryConfig.apiKey && cloudinaryConfig.apiSecret) {
+      logger.info('Cloudinary configured from database settings (DB credentials have priority)');
     } else {
-      cloudinary.config({
-        cloud_name: cloudinaryConfig.cloudName,
-        api_key: cloudinaryConfig.apiKey,
-        api_secret: cloudinaryConfig.apiSecret
-      });
-      logger.info('Cloudinary configured from database settings');
+      logger.info('Cloudinary configured from environment variables (DB credentials not found)');
     }
     
     cloudinaryConfigured = true;
@@ -37,6 +43,7 @@ const initializeCloudinary = async () => {
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET
     });
+    logger.info('Cloudinary configured from environment variables (fallback)');
     cloudinaryConfigured = true;
   }
 };

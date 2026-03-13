@@ -1,16 +1,25 @@
-const { bundleSocialAPI, bundleSocialConfig } = require('../config/bundleSocial');
+const { getBundleSocialAPI, bundleSocialConfig } = require('../config/bundleSocial');
 const FormData = require('form-data');
 const logger = require('../utils/logger');
 
 class BundleSocialService {
   constructor() {
-    this.api = bundleSocialAPI;
+    this.api = null;
+  }
+
+  // Get initialized API instance
+  async getAPI() {
+    if (!this.api) {
+      this.api = await getBundleSocialAPI();
+    }
+    return this.api;
   }
 
   // Create a new team for user
   async createTeam(userData) {
     try {
-      const response = await this.api.post('/team/', {
+      const api = await this.getAPI();
+      const response = await api.post('/team/', {
         name: `${userData.name}'s Team`,
         avatarUrl: userData.profilePicture || undefined
       });
@@ -26,7 +35,8 @@ class BundleSocialService {
   // Get team details
   async getTeam(teamId) {
     try {
-      const response = await this.api.get(`/team/${teamId}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/team/${teamId}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get Bundle.social team:', error.response?.data || error.message);
@@ -37,7 +47,8 @@ class BundleSocialService {
   // Create portal link for social account connection
   async createPortalLink(portalData) {
     try {
-      const response = await this.api.post('/social-account/create-portal-link', {
+      const api = await this.getAPI();
+      const response = await api.post('/social-account/create-portal-link', {
         teamId: portalData.teamId,
         socialAccountTypes: portalData.socialAccountTypes,
         redirectUrl: portalData.redirectUrl,
@@ -57,7 +68,8 @@ class BundleSocialService {
   // Connect social media account
   async connectSocialAccount(connectData) {
     try {
-      const response = await this.api.post('/social-account/connect', connectData);
+      const api = await this.getAPI();
+      const response = await api.post('/social-account/connect', connectData);
 
       logger.info('Social account connected:', { teamId: connectData.teamId, accountId: response.data.id });
       return response.data;
@@ -71,7 +83,8 @@ class BundleSocialService {
   async disconnectSocialAccount(type, teamId) {
     try {
       // Bundle.social expects type (platform) and teamId in request body
-      const response = await this.api.delete('/social-account/disconnect', {
+      const api = await this.getAPI();
+      const response = await api.delete('/social-account/disconnect', {
         data: {
           type: type.toUpperCase(), // Must be uppercase: TIKTOK, YOUTUBE, INSTAGRAM, etc.
           teamId: teamId
@@ -140,7 +153,8 @@ class BundleSocialService {
         bufferSize: videoData.buffer.length 
       });
 
-      const response = await this.api.post('/upload/', formData, {
+      const api = await this.getAPI();
+      const response = await api.post('/upload/', formData, {
         headers: {
           ...formData.getHeaders(),
           'x-api-key': bundleSocialConfig.apiKey, // Use config from database/env
@@ -178,7 +192,8 @@ class BundleSocialService {
   // Get upload details
   async getUpload(uploadId) {
     try {
-      const response = await this.api.get(`/upload/${uploadId}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/upload/${uploadId}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get upload:', error.response?.data || error.message);
@@ -195,7 +210,8 @@ class BundleSocialService {
       if (filters.type) params.type = filters.type; // 'image' or 'video'
       if (filters.status) params.status = filters.status; // 'USED' or 'UNUSED'
       
-      const response = await this.api.get('/upload/', { params });
+      const api = await this.getAPI();
+      const response = await api.get('/upload/', { params });
       
       logger.info('Fetched uploads from Bundle.social:', { 
         teamId, 
@@ -216,7 +232,8 @@ class BundleSocialService {
   // Delete upload
   async deleteUpload(uploadId) {
     try {
-      await this.api.delete(`/upload/${uploadId}`);
+      const api = await this.getAPI();
+      await api.delete(`/upload/${uploadId}`);
       logger.info('Upload deleted from Bundle.social:', { uploadId });
     } catch (error) {
       logger.error('Failed to delete upload:', error.response?.data || error.message);
@@ -247,7 +264,8 @@ class BundleSocialService {
         logger.info(`Bundle.social API retry attempt ${retryCount}/${maxRetries}`);
       }
 
-      const response = await this.api.post('/post/', payload);
+      const api = await this.getAPI();
+      const response = await api.post('/post/', payload);
 
       logger.info('Immediate post created in Bundle.social:', { 
         teamId: postData.teamId, 
@@ -281,7 +299,8 @@ class BundleSocialService {
         logger.info(`Bundle.social API retry attempt ${retryCount}/${maxRetries}`);
       }
 
-      const response = await this.api.post('/post/', payload);
+      const api = await this.getAPI();
+      const response = await api.post('/post/', payload);
 
       logger.info('Scheduled post created in Bundle.social:', { 
         teamId: postData.teamId, 
@@ -332,7 +351,8 @@ class BundleSocialService {
   // Update post
   async updatePost(postId, updateData) {
     try {
-      const response = await this.api.put(`/post/${postId}`, updateData);
+      const api = await this.getAPI();
+      const response = await api.put(`/post/${postId}`, updateData);
       logger.info('Post updated in Bundle.social:', { postId });
       return response.data;
     } catch (error) {
@@ -344,7 +364,8 @@ class BundleSocialService {
   // Delete post
   async deletePost(postId) {
     try {
-      await this.api.delete(`/post/${postId}`);
+      const api = await this.getAPI();
+      await api.delete(`/post/${postId}`);
       logger.info('Post deleted from Bundle.social:', { postId });
     } catch (error) {
       logger.error('Failed to delete post from Bundle.social:', error.response?.data || error.message);
@@ -355,7 +376,8 @@ class BundleSocialService {
   // Get post analytics
   async getPostAnalytics(postId) {
     try {
-      const response = await this.api.get(`/analytics/post/${postId}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/analytics/post/${postId}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get post analytics:', error.response?.data || error.message);
@@ -366,7 +388,8 @@ class BundleSocialService {
   // Get account analytics
   async getAccountAnalytics(socialAccountId) {
     try {
-      const response = await this.api.get(`/analytics/social-account/${socialAccountId}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/analytics/social-account/${socialAccountId}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get account analytics:', error.response?.data || error.message);
@@ -377,7 +400,8 @@ class BundleSocialService {
   // Get post by ID
   async getPost(postId) {
     try {
-      const response = await this.api.get(`/post/${postId}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/post/${postId}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get post:', error.response?.data || error.message);
@@ -388,7 +412,8 @@ class BundleSocialService {
   // Get organization details and usage
   async getOrganization() {
     try {
-      const response = await this.api.get('/organization/');
+      const api = await this.getAPI();
+      const response = await api.get('/organization/');
       return response.data;
     } catch (error) {
       logger.error('Failed to get organization:', error.response?.data || error.message);
@@ -399,7 +424,8 @@ class BundleSocialService {
   // Delete team
   async deleteTeam(teamId) {
     try {
-      await this.api.delete(`/team/${teamId}`);
+      const api = await this.getAPI();
+      await api.delete(`/team/${teamId}`);
       logger.info('Bundle.social team deleted:', { teamId });
     } catch (error) {
       logger.error('Failed to delete Bundle.social team:', error.response?.data || error.message);
@@ -410,7 +436,8 @@ class BundleSocialService {
   // Get team list
   async getTeamList() {
     try {
-      const response = await this.api.get('/team/');
+      const api = await this.getAPI();
+      const response = await api.get('/team/');
       return response.data;
     } catch (error) {
       logger.error('Failed to get team list:', error.response?.data || error.message);
@@ -428,7 +455,8 @@ class BundleSocialService {
         }
       });
 
-      const response = await this.api.get(`/post/?${params}`);
+      const api = await this.getAPI();
+      const response = await api.get(`/post/?${params}`);
       return response.data;
     } catch (error) {
       logger.error('Failed to get post list:', error.response?.data || error.message);
