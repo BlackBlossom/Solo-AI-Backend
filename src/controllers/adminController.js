@@ -1340,11 +1340,16 @@ const updateSettings = async (req, res, next) => {
       features
     } = req.body;
 
+    // Fetch current settings to merge with (prevents losing other fields)
+    const currentSettings = await Settings.findById('app_settings')
+      .select('+cloudinary.apiSecret +mongodb.uri +email.resend.apiKey +email.smtp.pass +apiKeys.falApiKey +apiKeys.bundleSocialApiKey +reddit.clientId +reddit.clientSecret +reddit.password +firebase.serviceAccount +rapidApi.key');
+
     // Build updates object
     const updates = {};
     
     if (cloudinary) {
-      updates.cloudinary = {};
+      // Merge with existing cloudinary settings
+      updates.cloudinary = { ...currentSettings?.cloudinary?.toObject?.() || currentSettings?.cloudinary || {} };
       if (cloudinary.cloudName !== undefined) updates.cloudinary.cloudName = cloudinary.cloudName;
       if (cloudinary.apiKey !== undefined) updates.cloudinary.apiKey = cloudinary.apiKey;
       if (cloudinary.apiSecret !== undefined) updates.cloudinary.apiSecret = cloudinary.apiSecret;
@@ -1355,7 +1360,8 @@ const updateSettings = async (req, res, next) => {
     }
 
     if (email) {
-      updates.email = {};
+      // Merge with existing email settings
+      updates.email = { ...currentSettings?.email?.toObject?.() || currentSettings?.email || {} };
       
       // Validate provider if specified
       if (email.provider !== undefined) {
@@ -1367,7 +1373,7 @@ const updateSettings = async (req, res, next) => {
       
       // Resend configuration
       if (email.resend) {
-        updates.email.resend = {};
+        updates.email.resend = { ...currentSettings?.email?.resend?.toObject?.() || currentSettings?.email?.resend || {} };
         if (email.resend.apiKey !== undefined) updates.email.resend.apiKey = email.resend.apiKey;
         if (email.resend.fromEmail !== undefined) updates.email.resend.fromEmail = email.resend.fromEmail;
         if (email.resend.fromName !== undefined) updates.email.resend.fromName = email.resend.fromName;
@@ -1375,7 +1381,7 @@ const updateSettings = async (req, res, next) => {
       
       // SMTP configuration
       if (email.smtp) {
-        updates.email.smtp = {};
+        updates.email.smtp = { ...currentSettings?.email?.smtp?.toObject?.() || currentSettings?.email?.smtp || {} };
         if (email.smtp.host !== undefined) updates.email.smtp.host = email.smtp.host;
         if (email.smtp.port !== undefined) updates.email.smtp.port = email.smtp.port;
         if (email.smtp.secure !== undefined) updates.email.smtp.secure = email.smtp.secure;
@@ -1387,7 +1393,8 @@ const updateSettings = async (req, res, next) => {
     }
 
     if (videoUpload) {
-      updates.videoUpload = {};
+      // Merge with existing videoUpload settings
+      updates.videoUpload = { ...currentSettings?.videoUpload?.toObject?.() || currentSettings?.videoUpload || {} };
       if (videoUpload.maxFileSize !== undefined) {
         if (videoUpload.maxFileSize < 10 || videoUpload.maxFileSize > 500) {
           return sendBadRequest(res, 'Video max file size must be between 10 and 500 MB');
@@ -1399,7 +1406,8 @@ const updateSettings = async (req, res, next) => {
     }
 
     if (apiKeys) {
-      updates.apiKeys = {};
+      // Merge with existing apiKeys to prevent losing other keys
+      updates.apiKeys = { ...currentSettings?.apiKeys?.toObject?.() || currentSettings?.apiKeys || {} };
       if (apiKeys.falApiKey !== undefined) updates.apiKeys.falApiKey = apiKeys.falApiKey;
       if (apiKeys.falModel !== undefined) updates.apiKeys.falModel = apiKeys.falModel;
       if (apiKeys.bundleSocialApiKey !== undefined) updates.apiKeys.bundleSocialApiKey = apiKeys.bundleSocialApiKey;
@@ -1407,19 +1415,22 @@ const updateSettings = async (req, res, next) => {
     }
 
     if (req.body.rapidApi) {
-      updates.rapidApi = {};
+      // Merge with existing rapidApi settings
+      updates.rapidApi = { ...currentSettings?.rapidApi?.toObject?.() || currentSettings?.rapidApi || {} };
       if (req.body.rapidApi.key !== undefined) updates.rapidApi.key = req.body.rapidApi.key;
       if (req.body.rapidApi.enabled !== undefined) updates.rapidApi.enabled = req.body.rapidApi.enabled;
     }
 
     if (urls) {
-      updates.urls = {};
+      // Merge with existing urls settings
+      updates.urls = { ...currentSettings?.urls?.toObject?.() || currentSettings?.urls || {} };
       if (urls.productionUrl !== undefined) updates.urls.productionUrl = urls.productionUrl;
       if (urls.frontendUrl !== undefined) updates.urls.frontendUrl = urls.frontendUrl;
     }
 
     if (app) {
-      updates.app = {};
+      // Merge with existing app settings
+      updates.app = { ...currentSettings?.app?.toObject?.() || currentSettings?.app || {} };
       if (app.name !== undefined) updates.app.name = app.name;
       if (app.description !== undefined) updates.app.description = app.description;
       if (app.supportEmail !== undefined) updates.app.supportEmail = app.supportEmail;
@@ -1428,7 +1439,8 @@ const updateSettings = async (req, res, next) => {
     }
 
     if (features) {
-      updates.features = {};
+      // Merge with existing features settings
+      updates.features = { ...currentSettings?.features?.toObject?.() || currentSettings?.features || {} };
       if (features.videoEditingEnabled !== undefined) updates.features.videoEditingEnabled = features.videoEditingEnabled;
       if (features.socialMediaIntegrationEnabled !== undefined) updates.features.socialMediaIntegrationEnabled = features.socialMediaIntegrationEnabled;
       if (features.aiAssistantEnabled !== undefined) updates.features.aiAssistantEnabled = features.aiAssistantEnabled;

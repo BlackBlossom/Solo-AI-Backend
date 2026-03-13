@@ -1,13 +1,12 @@
-const fal = require('@fal-ai/client');
+const { fal } = require('@fal-ai/client');
 const logger = require('../utils/logger');
 const configService = require('./configService');
 
 class FalAiService {
   constructor() {
     this.apiKey = '';
-    this.model = 'fal-ai/flux/dev';
+    this.model = 'fal-ai/any-llm'; // Default to a text generation model
     this.initialized = false;
-    this.client = null;
     
     // Initialize asynchronously
     this.initPromise = this.initialize();
@@ -21,15 +20,17 @@ class FalAiService {
       // Get API key from database settings first, fallback to env
       const apiKeys = await configService.getApiKeys();
       this.apiKey = apiKeys.falApiKey || process.env.FAL_API_KEY || '';
-      this.model = apiKeys.falModel || process.env.FAL_MODEL || 'fal-ai/flux/dev';
+      this.model = apiKeys.falModel || process.env.FAL_MODEL || 'fal-ai/any-llm';
       
       if (!this.apiKey) {
         logger.warn('Fal.ai API key not configured in database or environment - AI caption generation will not work');
         return;
       }
 
-      // Configure Fal.ai client - set credentials directly
-      process.env.FAL_KEY = this.apiKey;
+      // Configure Fal.ai client with credentials
+      fal.config({
+        credentials: this.apiKey
+      });
 
       this.initialized = true;
       logger.info('Fal.ai service initialized successfully', {
@@ -40,9 +41,11 @@ class FalAiService {
       logger.error('Failed to initialize Fal.ai service:', error.message);
       // Fallback to environment variable
       this.apiKey = process.env.FAL_API_KEY || '';
-      this.model = process.env.FAL_MODEL || 'fal-ai/flux/dev';
+      this.model = process.env.FAL_MODEL || 'fal-ai/any-llm';
       if (this.apiKey) {
-        process.env.FAL_KEY = this.apiKey;
+        fal.config({
+          credentials: this.apiKey
+        });
         this.initialized = true;
         logger.info('Fal.ai service initialized with environment variable');
       }
@@ -204,31 +207,32 @@ Be concise, engaging, and platform-optimized.`;
         model
       });
 
-      // Call Fal.ai text generation endpoint
-      const result = await fal.subscribe(model, {
+      // Call Fal.ai text generation endpoint (using any-llm model)
+      const result = await fal.subscribe('fal-ai/any-llm', {
         input: {
-          prompt: prompt,
-          num_inference_steps: 28,
-          guidance_scale: 3.5,
-          enable_safety_checker: true
+          model: 'google/gemini-flash-1.5',
+          prompt: prompt
         },
         logs: false,
         onQueueUpdate: (update) => {
-          if (update.status === 'IN_PROGRESS') {
-            logger.debug('Caption generation in progress');
+          if (update.status === 'IN_QUEUE') {
+            logger.debug('Caption generation queued, position:', update.position);
           }
         }
       });
 
       // Extract text from result
       let generatedText = '';
-      if (result.output && typeof result.output === 'string') {
-        generatedText = result.output;
-      } else if (result.data && result.data.output) {
+      if (result.data && result.data.output) {
         generatedText = result.data.output;
-      } else if (result.text) {
-        generatedText = result.text;
+      } else if (result.output && typeof result.output === 'string') {
+        generatedText = result.output;
+      } else if (result.data && typeof result.data === 'string') {
+        generatedText = result.data;
+      } else if (typeof result === 'object' && result.output) {
+        generatedText = result.output;
       } else {
+        logger.warn('Unexpected response format from Fal.ai:', JSON.stringify(result));
         throw new Error('Unexpected response format from Fal.ai');
       }
 
@@ -334,22 +338,23 @@ Format: #hashtag1 #hashtag2 #hashtag3...`;
         maxCount
       });
 
-      const result = await fal.subscribe(this.model, {
+      const result = await fal.subscribe('fal-ai/any-llm', {
         input: {
-          prompt: prompt,
-          num_inference_steps: 28,
-          guidance_scale: 3.5
+          model: 'google/gemini-flash-1.5',
+          prompt: prompt
         },
         logs: false
       });
 
       let hashtagText = '';
-      if (result.output && typeof result.output === 'string') {
-        hashtagText = result.output;
-      } else if (result.data && result.data.output) {
+      if (result.data && result.data.output) {
         hashtagText = result.data.output;
-      } else if (result.text) {
-        hashtagText = result.text;
+      } else if (result.output && typeof result.output === 'string') {
+        hashtagText = result.output;
+      } else if (result.data && typeof result.data === 'string') {
+        hashtagText = result.data;
+      } else if (typeof result === 'object' && result.output) {
+        hashtagText = result.output;
       }
 
       const hashtags = hashtagText.match(/#\w+/g) || [];
@@ -398,22 +403,23 @@ Provide ONLY the optimized caption, no explanations.`;
         originalLength: caption.length
       });
 
-      const result = await fal.subscribe(this.model, {
+      const result = await fal.subscribe('fal-ai/any-llm', {
         input: {
-          prompt: prompt,
-          num_inference_steps: 28,
-          guidance_scale: 3.5
+          model: 'google/gemini-flash-1.5',
+          prompt: prompt
         },
         logs: false
       });
 
       let optimized = '';
-      if (result.output && typeof result.output === 'string') {
-        optimized = result.output.trim();
-      } else if (result.data && result.data.output) {
+      if (result.data && result.data.output) {
         optimized = result.data.output.trim();
-      } else if (result.text) {
-        optimized = result.text.trim();
+      } else if (result.output && typeof result.output === 'string') {
+        optimized = result.output.trim();
+      } else if (result.data && typeof result.data === 'string') {
+        optimized = result.data.trim();
+      } else if (typeof result === 'object' && result.output) {
+        optimized = result.output.trim();
       }
 
       logger.info('Caption optimized:', {
@@ -479,19 +485,20 @@ Provide ONLY the optimized caption, no explanations.`;
     await this.ensureInitialized();
 
     try {
-      const result = await fal.subscribe(this.model, {
+      const result = await fal.subscribe('fal-ai/any-llm', {
         input: {
-          prompt: 'Say "OK"',
-          num_inference_steps: 1,
-          guidance_scale: 1
+          model: 'google/gemini-flash-1.5',
+          prompt: 'Say "OK"'
         },
         logs: false
       });
 
+      const response = result.data?.output || result.output || result.data || 'OK';
+
       return {
         healthy: true,
-        model: this.model,
-        response: result.output || result.text || 'OK'
+        model: 'fal-ai/any-llm',
+        response: typeof response === 'string' ? response : 'OK'
       };
     } catch (error) {
       return {
@@ -503,3 +510,6 @@ Provide ONLY the optimized caption, no explanations.`;
 }
 
 module.exports = new FalAiService();
+
+
+
