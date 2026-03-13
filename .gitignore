@@ -5,7 +5,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env
 
 # Logs
 logs/
@@ -39,7 +38,6 @@ ehthumbs.db
 Thumbs.db
 
 # IDE files
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -62,3 +60,10 @@ ignore
 public/inspiration.html
 test-perplexity.js
 migrate-user-videos-posts.js
+check-api-keys.js
+diagnose-registration-error.js
+test-api-keys.js
+test-config-priority.js
+test-bundle-comprehensive.js
+test-partial-update.js
+config.bat

@@ -202,11 +202,11 @@ const settingsSchema = new mongoose.Schema({
   urls: {
     productionUrl: {
       type: String,
-      default: process.env.PRODUCTION_URL || 'https://api.soloai.com'
+      default: process.env.PRODUCTION_URL || 'https://apidocs.soloaiapp.com'
     },
     frontendUrl: {
       type: String,
-      default: process.env.FRONTEND_URL || 'https://app.soloai.com'
+      default: process.env.FRONTEND_URL || 'https://admin.soloaiapp.com'
     }
   },
 

@@ -4,8 +4,8 @@
   "description": "Video editing app backend MVP with Bundle.social integration",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node init && node server.js",
+    "dev": "node init && nodemon server.js",
     "test": "jest",
     "seed": "node src/database/seed.js",
     "seed:settings": "node src/database/seedSettings.js",
