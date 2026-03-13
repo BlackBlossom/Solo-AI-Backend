@@ -4,7 +4,14 @@ const logger = require('../utils/logger');
 /**
  * Configuration Service
  * Centralized service to fetch and manage application settings
- * Settings are stored in database and can be updated via admin panel
+ * 
+ * PRIORITY SYSTEM:
+ * 1. Database credentials always have FIRST PRIORITY
+ * 2. Environment variables are used as FALLBACK only when DB values are empty/null
+ * 3. This applies to ALL credentials: Cloudinary, Bundle.social, Email, Reddit, RapidAPI, Firebase, etc.
+ * 
+ * Settings are stored in database and can be updated via admin panel.
+ * When settings are updated in DB, they immediately take precedence over .env values.
  */
 class ConfigService {
   constructor() {
@@ -167,27 +174,64 @@ class ConfigService {
 
   /**
    * Get Cloudinary configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getCloudinaryConfig() {
     const settings = await this.getSettings();
-    return settings.cloudinary || this.getFallbackSettings().cloudinary;
+    const dbCloudinary = settings.cloudinary;
+    const envCloudinary = this.getFallbackSettings().cloudinary;
+    
+    // DB credentials take priority for each field
+    return {
+      cloudName: dbCloudinary?.cloudName || envCloudinary.cloudName,
+      apiKey: dbCloudinary?.apiKey || envCloudinary.apiKey,
+      apiSecret: dbCloudinary?.apiSecret || envCloudinary.apiSecret
+    };
   }
 
   /**
    * Get Email configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getEmailConfig() {
     const settings = await this.getSettings();
-    return settings.email || this.getFallbackSettings().email;
+    const dbEmail = settings.email;
+    const envEmail = this.getFallbackSettings().email;
+    
+    if (!dbEmail) {
+      return envEmail;
+    }
+    
+    // DB credentials take priority, merge with env fallbacks
+    return {
+      provider: dbEmail.provider || envEmail.provider,
+      resend: {
+        apiKey: dbEmail.resend?.apiKey || envEmail.resend.apiKey,
+        fromEmail: dbEmail.resend?.fromEmail || envEmail.resend.fromEmail,
+        fromName: dbEmail.resend?.fromName || envEmail.resend.fromName
+      },
+      smtp: {
+        host: dbEmail.smtp?.host || envEmail.smtp.host,
+        port: dbEmail.smtp?.port || envEmail.smtp.port,
+        secure: dbEmail.smtp?.secure !== undefined ? dbEmail.smtp.secure : envEmail.smtp.secure,
+        user: dbEmail.smtp?.user || envEmail.smtp.user,
+        pass: dbEmail.smtp?.pass || envEmail.smtp.pass,
+        fromEmail: dbEmail.smtp?.fromEmail || envEmail.smtp.fromEmail,
+        fromName: dbEmail.smtp?.fromName || envEmail.smtp.fromName
+      }
+    };
   }
 
   /**
    * Get Bundle.social configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getBundleSocialConfig() {
     const settings = await this.getSettings();
-    const apiKey = settings.apiKeys?.bundleSocialApiKey || process.env.BUNDLE_SOCIAL_API_KEY;
-    const orgId = settings.apiKeys?.bundleSocialOrgId || process.env.BUNDLE_SOCIAL_ORG_ID;
+    
+    // DB credentials take priority - only fall back to env if DB values are empty/null
+    const apiKey = settings.apiKeys?.bundleSocialApiKey || process.env.BUNDLE_SOCIAL_API_KEY || '';
+    const orgId = settings.apiKeys?.bundleSocialOrgId || process.env.BUNDLE_SOCIAL_ORG_ID || '';
     
     return {
       apiKey,
@@ -206,10 +250,20 @@ class ConfigService {
 
   /**
    * Get API keys
+   * Database credentials have PRIORITY over environment variables
    */
   async getApiKeys() {
     const settings = await this.getSettings();
-    return settings.apiKeys || this.getFallbackSettings().apiKeys;
+    const dbKeys = settings.apiKeys;
+    const envKeys = this.getFallbackSettings().apiKeys;
+    
+    // DB credentials take priority for each key
+    return {
+      falApiKey: dbKeys?.falApiKey || envKeys.falApiKey,
+      falModel: dbKeys?.falModel || envKeys.falModel,
+      bundleSocialApiKey: dbKeys?.bundleSocialApiKey || envKeys.bundleSocialApiKey,
+      bundleSocialOrgId: dbKeys?.bundleSocialOrgId || envKeys.bundleSocialOrgId
+    };
   }
 
   /**
@@ -238,10 +292,21 @@ class ConfigService {
 
   /**
    * Get Reddit API configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getRedditConfig() {
     const settings = await this.getSettings();
-    return settings.reddit || this.getFallbackSettings().reddit;
+    const dbReddit = settings.reddit;
+    const envReddit = this.getFallbackSettings().reddit;
+    
+    // DB credentials take priority for each field
+    return {
+      clientId: dbReddit?.clientId || envReddit.clientId,
+      clientSecret: dbReddit?.clientSecret || envReddit.clientSecret,
+      username: dbReddit?.username || envReddit.username,
+      password: dbReddit?.password || envReddit.password,
+      userAgent: dbReddit?.userAgent || envReddit.userAgent
+    };
   }
 
   /**
@@ -254,18 +319,35 @@ class ConfigService {
 
   /**
    * Get Firebase configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getFirebaseConfig() {
     const settings = await this.getSettings();
-    return settings.firebase || this.getFallbackSettings().firebase;
+    const dbFirebase = settings.firebase;
+    const envFirebase = this.getFallbackSettings().firebase;
+    
+    // DB credentials take priority
+    return {
+      serviceAccount: dbFirebase?.serviceAccount || envFirebase.serviceAccount,
+      enabled: dbFirebase?.enabled !== undefined ? dbFirebase.enabled : envFirebase.enabled
+    };
   }
 
   /**
    * Get RapidAPI configuration
+   * Database credentials have PRIORITY over environment variables
    */
   async getRapidApiConfig() {
     const settings = await this.getSettings();
-    return settings.rapidApi || this.getFallbackSettings().rapidApi;
+    const dbRapid = settings.rapidApi;
+    const envRapid = this.getFallbackSettings().rapidApi;
+    
+    // DB credentials take priority
+    const apiKey = dbRapid?.key || envRapid.key;
+    return {
+      key: apiKey,
+      enabled: dbRapid?.enabled !== undefined ? dbRapid.enabled : (apiKey ? true : false)
+    };
   }
 
   /**

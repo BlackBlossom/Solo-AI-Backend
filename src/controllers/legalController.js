@@ -351,6 +351,12 @@ exports.getLegalLinks = async (req, res) => {
   try {
     const baseUrl = `${req.protocol}://${req.get('host')}/api/v1/legal`;
 
+    const publicUrlMap = {
+      privacy_policy: 'https://soloaiapp.com/privacypolicy',
+      terms_of_use: 'https://soloaiapp.com/terms',
+      faq: 'https://soloaiapp.com/support',
+    };
+
     const contents = await LegalContent.find({ isPublished: true }).select(
       'type title updatedAt version'
     );
@@ -358,7 +364,7 @@ exports.getLegalLinks = async (req, res) => {
     const links = contents.map((content) => ({
       type: content.type,
       title: content.title,
-      url: `${baseUrl}/${content.type}/view`,
+      url: publicUrlMap[content.type] || `${baseUrl}/${content.type}/view`,
       apiUrl: `${baseUrl}/${content.type}`,
       lastUpdated: content.updatedAt,
       version: content.version,
